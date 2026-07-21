@@ -54,6 +54,19 @@ export function IngestPanel({ sessionId, enabled = true }: IngestPanelProps) {
           {ingest.streaming_active && <Badge variant="live">Streaming</Badge>}
         </div>
         <p>Frames: {ingest.composited_frames.toLocaleString()}</p>
+        {ingest.participants.map((p) => (
+          <p key={p.participant_peer_id}>
+            {p.participant_peer_id.slice(0, 8)}… rtp {p.rtp_video_packets}/{p.rtp_audio_packets}{' '}
+            rtcp {p.rtcp_video_packets}/{p.rtcp_audio_packets} · decoded{' '}
+            {p.video_buffers}/{p.audio_buffers}
+          </p>
+        ))}
+        {ingest.rtmp_sources?.map((source) => (
+          <p key={source.source_id}>
+            RTMP {source.display_name || source.source_id.slice(0, 8)}… decoded{' '}
+            {source.video_buffers}/{source.audio_buffers}
+          </p>
+        ))}
         <p>
           Canvas: {ingest.canvas_width}×{ingest.canvas_height} · Layout: {ingest.layout}
         </p>

@@ -7,6 +7,7 @@ import { ApiError } from '@/api/client'
 import { ConnectionBanner } from '@/components/studio/ConnectionBanner'
 import { HostToolbar } from '@/components/studio/HostToolbar'
 import { IngestPanel } from '@/components/studio/IngestPanel'
+import { RtmpIngestPanel } from '@/components/studio/RtmpIngestPanel'
 import { MediaControls } from '@/components/studio/MediaControls'
 import { ParticipantGrid } from '@/components/studio/ParticipantGrid'
 import { useHostControls } from '@/hooks/useHostControls'
@@ -159,6 +160,11 @@ export function StudioPage() {
                 onStartStream={(t, u) => void hostControls.handleStartStream(t, u)}
                 onStopStream={() => void hostControls.handleStopStream()}
                 onEndSession={() => void handleEndSession()}
+              />
+              <RtmpIngestPanel
+                sessionId={sessionId}
+                loading={hostControls.loading}
+                activeStreamUrl={hostControls.activeStream?.destination_url}
               />
               <IngestPanel sessionId={sessionId} />
             </div>

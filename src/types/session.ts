@@ -76,6 +76,17 @@ export interface IngestStatus {
     participant_peer_id: string
     audio_buffers: number
     video_buffers: number
+    rtp_audio_packets: number
+    rtp_video_packets: number
+    rtcp_audio_packets: number
+    rtcp_video_packets: number
+  }>
+  rtmp_sources: Array<{
+    source_id: string
+    url: string
+    display_name: string
+    video_buffers: number
+    audio_buffers: number
   }>
 }
 
