@@ -1,4 +1,15 @@
-export type LayoutType = 'CONTAIN' | 'THUMBNAIL'
+export type LayoutType =
+  | 'CONTAIN'
+  | 'COVER'
+  | 'THUMBNAIL'
+  | 'GRID'
+  | 'SIDE_BY_SIDE'
+  | 'HALFSCREEN'
+  | 'SPOTLIGHT'
+  | 'CINEMA'
+  | 'PICTURE_IN_PICTURE'
+  | 'OVERLAY'
+  | 'FULLSCREEN'
 
 export type SessionStatus = 'CREATED' | 'ACTIVE' | 'ENDED'
 

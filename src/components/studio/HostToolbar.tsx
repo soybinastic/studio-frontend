@@ -93,8 +93,17 @@ export function HostToolbar({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="CONTAIN">Contain — full frame</SelectItem>
-            <SelectItem value="THUMBNAIL">Thumbnail — PiP style</SelectItem>
+            <SelectItem value="CONTAIN">Contain — dynamic grid</SelectItem>
+            <SelectItem value="COVER">Cover — grid, fill tiles</SelectItem>
+            <SelectItem value="GRID">Grid — fixed 2×2 / 3×3</SelectItem>
+            <SelectItem value="SIDE_BY_SIDE">Side by side — 50/50</SelectItem>
+            <SelectItem value="HALFSCREEN">Half screen — 50/50</SelectItem>
+            <SelectItem value="SPOTLIGHT">Spotlight — host + side strip</SelectItem>
+            <SelectItem value="THUMBNAIL">Thumbnail — host + bottom strip</SelectItem>
+            <SelectItem value="CINEMA">Cinema — host + filmstrip</SelectItem>
+            <SelectItem value="PICTURE_IN_PICTURE">Picture in picture</SelectItem>
+            <SelectItem value="OVERLAY">Overlay — floating PiP</SelectItem>
+            <SelectItem value="FULLSCREEN">Fullscreen — host only</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
