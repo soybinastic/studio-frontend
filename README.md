@@ -32,6 +32,19 @@ npm run dev
 |----------|---------|-------------|
 | `VITE_COMPOSITOR_API_URL` | `http://localhost:8000/api/v1` | Compositor REST API base URL |
 
+Local: copy `.env.example` → `.env`.  
+Staging: copy `.env.staging.example` → `.env.staging`, then build with staging mode.
+
+## Build
+
+```bash
+npm run build
+npm run preview
+
+# Staging (loads .env.staging)
+npm run build -- --mode staging
+```
+
 ## Routes
 
 | Path | Role |
@@ -48,13 +61,6 @@ npm run dev
 - **Host controls:** Layout (CONTAIN / THUMBNAIL), recording, RTMP/HLS streaming, end session
 - **Theme:** Light/dark toggle in header
 - **Polish:** Toasts, leave/end confirmations, beforeunload warning in room
-
-## Build
-
-```bash
-npm run build
-npm run preview
-```
 
 ## Architecture notes
 
