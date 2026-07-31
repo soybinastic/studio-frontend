@@ -20,6 +20,21 @@ const OPUS_CODEC_OPTIONS = {
   opusMaxAverageBitrate: 64000,
 }
 
+// Match compositor canvas (1920×1080) to avoid upscaling blur in the mix.
+const WEBCAM_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 1920, min: 1280 },
+  height: { ideal: 1080, min: 720 },
+  frameRate: { ideal: 30 },
+}
+
+const WEBCAM_CODEC_OPTIONS = {
+  videoGoogleStartBitrate: 2500,
+}
+
+const WEBCAM_ENCODINGS: RTCRtpEncodingParameters[] = [
+  { maxBitrate: 2_500_000 },
+]
+
 export interface RoomClientOptions {
   roomId: string
   peerId: string
@@ -149,17 +164,15 @@ export class RoomClient {
     }
 
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30 },
-      },
+      video: WEBCAM_VIDEO_CONSTRAINTS,
     })
     const track = stream.getVideoTracks()[0]
 
     this.webcamProducer = await this.sendTransport.produce({
       track,
       appData: { source: 'video' },
+      codecOptions: WEBCAM_CODEC_OPTIONS,
+      encodings: WEBCAM_ENCODINGS,
     })
 
     this.webcamEnabled = true
