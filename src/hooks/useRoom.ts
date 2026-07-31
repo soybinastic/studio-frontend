@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RoomClient } from '@/media/RoomClient'
 import type { ConnectionState, ParticipantMedia } from '@/types/session'
+import type { DeviceSelection } from '@/types/devices'
 
 export interface UseRoomOptions {
   roomId: string
@@ -8,6 +9,8 @@ export interface UseRoomOptions {
   displayName: string
   mediasoupWsUrl: string
   enabled?: boolean
+  autoPublish?: boolean
+  deviceSelection?: DeviceSelection | null
 }
 
 export function useRoom({
@@ -16,17 +19,21 @@ export function useRoom({
   displayName,
   mediasoupWsUrl,
   enabled = true,
+  autoPublish = false,
+  deviceSelection,
 }: UseRoomOptions) {
   const clientRef = useRef<RoomClient | null>(null)
   const connectionStateRef = useRef<ConnectionState>('idle')
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle')
   const [participants, setParticipants] = useState<ParticipantMedia[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [isPublished, setIsPublished] = useState(false)
 
   const leave = useCallback(() => {
     clientRef.current?.close()
     clientRef.current = null
     setConnectionState('disconnected')
+    setIsPublished(false)
   }, [])
 
   const toggleMic = useCallback(async () => {
@@ -36,6 +43,34 @@ export function useRoom({
   const toggleWebcam = useCallback(async () => {
     await clientRef.current?.toggleWebcam()
   }, [])
+
+  const publishProducers = useCallback(async () => {
+    if (!clientRef.current) return
+    await clientRef.current.publishProducers()
+    setIsPublished(true)
+  }, [])
+
+  const switchDevices = useCallback(
+    async (selection: DeviceSelection) => {
+      const client = clientRef.current
+      if (!client) return
+
+      client.setDeviceConstraints({
+        cameraId: selection.cameraId,
+        microphoneId: selection.microphoneId,
+      })
+
+      const wasWebcam = clientRef.current
+      if (isPublished) {
+        await client.toggleWebcam()
+        await client.toggleWebcam()
+        await client.toggleMic()
+        await client.toggleMic()
+      }
+      void wasWebcam
+    },
+    [isPublished],
+  )
 
   useEffect(() => {
     if (!enabled || !roomId || !peerId || !displayName || !mediasoupWsUrl) {
@@ -48,6 +83,10 @@ export function useRoom({
       peerId,
       displayName,
       mediasoupWsUrl,
+      autoPublish,
+      deviceConstraints: deviceSelection
+        ? { cameraId: deviceSelection.cameraId, microphoneId: deviceSelection.microphoneId }
+        : undefined,
       onStateChange: (state) => {
         if (!cancelled) {
           connectionStateRef.current = state
@@ -86,7 +125,7 @@ export function useRoom({
       client.close()
       clientRef.current = null
     }
-  }, [enabled, roomId, peerId, displayName, mediasoupWsUrl])
+  }, [enabled, roomId, peerId, displayName, mediasoupWsUrl, autoPublish, deviceSelection])
 
   const localParticipant = participants.find((p) => p.isLocal)
   const micEnabled = localParticipant?.audioEnabled ?? false
@@ -98,8 +137,11 @@ export function useRoom({
     error,
     micEnabled,
     webcamEnabled,
+    isPublished,
     toggleMic,
     toggleWebcam,
+    publishProducers,
+    switchDevices,
     leave,
   }
 }
