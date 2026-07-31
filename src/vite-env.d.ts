@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_COMPOSITOR_API_URL: string
+  readonly VITE_STREAM_DESTINATION_MODAL?: string
 }
 
 interface ImportMeta {

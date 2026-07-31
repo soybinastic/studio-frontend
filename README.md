@@ -31,6 +31,7 @@ npm run dev
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_COMPOSITOR_API_URL` | `http://localhost:8000/api/v1` | Compositor REST API base URL |
+| `VITE_STREAM_DESTINATION_MODAL` | `false` | When `true`, host picks RTMP destinations in a modal before going live. When `false`, Go live starts RTMP using the compositor `DEFAULT_RTMP_URL`. |
 
 Local: copy `.env.example` → `.env`.  
 Staging: copy `.env.staging.example` → `.env.staging`, then build with staging mode.

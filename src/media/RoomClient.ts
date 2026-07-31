@@ -3,6 +3,7 @@ import * as mediasoupClient from 'mediasoup-client'
 import type { types as MediasoupTypes } from 'mediasoup-client'
 import protooClient from 'protoo-client'
 import { getDeviceInfo } from '@/media/deviceInfo'
+import { isCompositorPeer } from '@/lib/participants'
 import type { ConnectionState, ParticipantMedia } from '@/types/session'
 
 const MIC_CONSTRAINTS: MediaTrackConstraints = {
@@ -40,6 +41,11 @@ export interface RoomClientOptions {
   peerId: string
   displayName: string
   mediasoupWsUrl: string
+  autoPublish?: boolean
+  deviceConstraints?: {
+    cameraId?: string | null
+    microphoneId?: string | null
+  }
   onStateChange?: (state: ConnectionState) => void
   onParticipantsChange?: (participants: ParticipantMedia[]) => void
   onError?: (error: Error) => void
@@ -65,9 +71,20 @@ export class RoomClient {
   private readonly consumingQueue = new AwaitQueue()
   private micEnabled = false
   private webcamEnabled = false
+  private deviceConstraints: { cameraId?: string | null; microphoneId?: string | null } = {}
 
   constructor(options: RoomClientOptions) {
     this.options = options
+    this.deviceConstraints = options.deviceConstraints ?? {}
+  }
+
+  setDeviceConstraints(constraints: { cameraId?: string | null; microphoneId?: string | null }): void {
+    this.deviceConstraints = constraints
+  }
+
+  async publishProducers(options?: { mic?: boolean; webcam?: boolean }): Promise<void> {
+    if (options?.mic !== false) await this.enableMic()
+    if (options?.webcam !== false) await this.enableWebcam()
   }
 
   get peerId() {
@@ -129,7 +146,14 @@ export class RoomClient {
       return
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS })
+    const audioConstraints: MediaTrackConstraints = {
+      ...MIC_CONSTRAINTS,
+      ...(this.deviceConstraints.microphoneId
+        ? { deviceId: { exact: this.deviceConstraints.microphoneId } }
+        : {}),
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
     this.micStream = stream
     const track = stream.getAudioTracks()[0]
 
@@ -163,9 +187,14 @@ export class RoomClient {
       return
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: WEBCAM_VIDEO_CONSTRAINTS,
-    })
+    const videoConstraints: MediaTrackConstraints = {
+      ...WEBCAM_VIDEO_CONSTRAINTS,
+      ...(this.deviceConstraints.cameraId
+        ? { deviceId: { exact: this.deviceConstraints.cameraId } }
+        : {}),
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints })
     const track = stream.getVideoTracks()[0]
 
     this.webcamProducer = await this.sendTransport.produce({
@@ -335,11 +364,13 @@ export class RoomClient {
 
     for (const peer of peers) {
       if (peer.peerId === this.options.peerId) continue
+      if (this.shouldExcludePeer(peer.peerId, peer.displayName)) continue
       this.ensureRemoteParticipant(peer.peerId, peer.displayName)
     }
 
-    await this.enableMic()
-    await this.enableWebcam()
+    if (this.options.autoPublish !== false) {
+      await this.publishProducers()
+    }
   }
 
   private async handleProtooRequest(
@@ -365,6 +396,11 @@ export class RoomClient {
         kind: MediasoupTypes.MediaKind
         rtpParameters: MediasoupTypes.RtpParameters
         appData: { source?: string }
+      }
+
+      if (this.shouldExcludePeer(data.peerId)) {
+        reject(403, 'Cannot consume system peer')
+        return
       }
 
       try {
@@ -401,7 +437,10 @@ export class RoomClient {
     switch (notification.method) {
       case 'newPeer': {
         const peer = notification.data.peer as { peerId: string; displayName: string }
-        if (peer.peerId !== this.options.peerId) {
+        if (
+          peer.peerId !== this.options.peerId &&
+          !this.shouldExcludePeer(peer.peerId, peer.displayName)
+        ) {
           this.ensureRemoteParticipant(peer.peerId, peer.displayName)
           this.emitParticipants()
         }
@@ -431,6 +470,13 @@ export class RoomClient {
     }
   }
 
+  private shouldExcludePeer(peerId: string, displayName?: string): boolean {
+    return isCompositorPeer(peerId, {
+      roomId: this.options.roomId,
+      displayName,
+    })
+  }
+
   private ensureRemoteParticipant(peerId: string, displayName: string): RemoteParticipant {
     let participant = this.remoteParticipants.get(peerId)
     if (!participant) {
@@ -455,7 +501,12 @@ export class RoomClient {
       },
     ]
 
-    for (const remote of this.remoteParticipants.values()) {
+    for (const [peerId, remote] of this.remoteParticipants.entries()) {
+      if (this.shouldExcludePeer(peerId, remote.displayName)) {
+        this.remoteParticipants.delete(peerId)
+        continue
+      }
+
       let audioTrack: MediaStreamTrack | undefined
       let videoTrack: MediaStreamTrack | undefined
 
