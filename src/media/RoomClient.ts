@@ -238,6 +238,25 @@ export class RoomClient {
     }
   }
 
+  async replaceDevices(selection: {
+    cameraId?: string | null
+    microphoneId?: string | null
+  }): Promise<void> {
+    this.setDeviceConstraints({
+      cameraId: selection.cameraId,
+      microphoneId: selection.microphoneId,
+    })
+
+    const wasMic = this.micEnabled
+    const wasWebcam = this.webcamEnabled
+
+    if (this.micProducer) await this.disableMic()
+    if (this.webcamProducer) await this.disableWebcam()
+
+    if (wasMic) await this.enableMic()
+    if (wasWebcam) await this.enableWebcam()
+  }
+
   close(): void {
     if (this.closed) return
     this.closed = true

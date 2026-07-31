@@ -2,7 +2,8 @@ import { getLayoutMeta } from '@/lib/layouts'
 import { backgroundShouldShow } from '@/lib/graphics'
 import { PreviewParticipant } from '@/components/studio/preview/PreviewParticipant'
 import { PreviewGraphicsLayer } from '@/components/studio/preview/PreviewGraphicsLayer'
-import type { LayoutType } from '@/types/session'
+import { PreviewCountdownLayer } from '@/components/studio/preview/PreviewCountdownLayer'
+import type { CountdownState, LayoutType } from '@/types/session'
 import type { StudioParticipant } from '@/types/participants'
 import type { GraphicsState } from '@/types/graphics'
 import { cn } from '@/lib/utils'
@@ -11,13 +12,14 @@ interface PreviewCanvasProps {
   layout: LayoutType
   participants: StudioParticipant[]
   graphics: GraphicsState | null
+  countdownState?: CountdownState | null
 }
 
 /**
  * HTML preview canvas — approximates layout visually for WYSIWYG.
  * Actual positioning/scaling/cropping is handled by the compositor backend.
  */
-export function PreviewCanvas({ layout, participants, graphics }: PreviewCanvasProps) {
+export function PreviewCanvas({ layout, participants, graphics, countdownState }: PreviewCanvasProps) {
   const meta = getLayoutMeta(layout)
   const visible = participants.filter((p) => !p.isHidden)
   const host = visible.find((p) => p.isHost)
@@ -112,6 +114,7 @@ export function PreviewCanvas({ layout, participants, graphics }: PreviewCanvasP
         </div>
 
         <PreviewGraphicsLayer layout={layout} graphics={graphics} variant="overlay" />
+        <PreviewCountdownLayer countdownState={countdownState ?? null} />
 
         <div className="absolute left-2 top-2 z-20 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white/70">
           {meta.label}

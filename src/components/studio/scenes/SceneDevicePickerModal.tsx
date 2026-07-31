@@ -1,0 +1,299 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Camera, Mic, Speaker, Volume2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { AudioMeter } from '@/components/studio/device-setup/AudioMeter'
+import { CameraPreview } from '@/components/studio/device-setup/CameraPreview'
+import type { DeviceSelection, MediaDeviceInfo } from '@/types/devices'
+import { enumerateMediaDevices, pickDefaultSelection } from '@/lib/devices'
+
+interface SceneDevicePickerModalProps {
+  open: boolean
+  onConfirm: (selection: DeviceSelection) => void
+  onCancel: () => void
+}
+
+const EMPTY_SELECTION: DeviceSelection = {
+  cameraId: null,
+  microphoneId: null,
+  speakerId: null,
+}
+
+export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevicePickerModalProps) {
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  const [selection, setSelection] = useState<DeviceSelection>(EMPTY_SELECTION)
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null)
+  const [audioLevel, setAudioLevel] = useState(0)
+  const [isEnumerating, setIsEnumerating] = useState(false)
+  const [permissionError, setPermissionError] = useState<string | null>(null)
+
+  const previewStreamRef = useRef<MediaStream | null>(null)
+  const analyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; raf: number } | null>(null)
+
+  const stopPreview = useCallback(() => {
+    if (previewStreamRef.current) {
+      previewStreamRef.current.getTracks().forEach((t) => t.stop())
+      previewStreamRef.current = null
+    }
+    setPreviewStream(null)
+    if (analyserRef.current) {
+      cancelAnimationFrame(analyserRef.current.raf)
+      void analyserRef.current.ctx.close()
+      analyserRef.current = null
+    }
+    setAudioLevel(0)
+  }, [])
+
+  const startPreview = useCallback(
+    async (nextSelection: DeviceSelection) => {
+      stopPreview()
+
+      const constraints: MediaStreamConstraints = {}
+      if (nextSelection.cameraId) {
+        constraints.video = {
+          deviceId: { exact: nextSelection.cameraId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 },
+        }
+      }
+      if (nextSelection.microphoneId) {
+        constraints.audio = {
+          deviceId: { exact: nextSelection.microphoneId },
+          echoCancellation: true,
+          noiseSuppression: true,
+        }
+      }
+
+      if (!constraints.video && !constraints.audio) return
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints)
+        previewStreamRef.current = stream
+        setPreviewStream(stream)
+
+        if (nextSelection.microphoneId && stream.getAudioTracks().length > 0) {
+          const ctx = new AudioContext()
+          const source = ctx.createMediaStreamSource(stream)
+          const analyser = ctx.createAnalyser()
+          analyser.fftSize = 256
+          source.connect(analyser)
+
+          const data = new Uint8Array(analyser.frequencyBinCount)
+          const tick = () => {
+            analyser.getByteFrequencyData(data)
+            const avg = data.reduce((a, b) => a + b, 0) / data.length
+            setAudioLevel(avg / 255)
+            analyserRef.current!.raf = requestAnimationFrame(tick)
+          }
+          analyserRef.current = { ctx, analyser, raf: requestAnimationFrame(tick) }
+        }
+      } catch {
+        setPermissionError('Could not start preview with selected devices.')
+      }
+    },
+    [stopPreview],
+  )
+
+  useEffect(() => {
+    if (!open) {
+      stopPreview()
+      return
+    }
+
+    let cancelled = false
+    setPermissionError(null)
+    setIsEnumerating(true)
+
+    void (async () => {
+      try {
+        const permissionStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: true,
+        })
+        permissionStream.getTracks().forEach((t) => t.stop())
+
+        const list = await enumerateMediaDevices()
+        if (cancelled) return
+
+        const defaults = pickDefaultSelection(list, EMPTY_SELECTION)
+        setDevices(list)
+        setSelection(defaults)
+        await startPreview(defaults)
+      } catch {
+        if (!cancelled) {
+          setPermissionError('Camera and microphone access is required to pick scene devices.')
+        }
+      } finally {
+        if (!cancelled) setIsEnumerating(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      stopPreview()
+    }
+  }, [open, startPreview, stopPreview])
+
+  const cameras = devices.filter((d) => d.kind === 'videoinput')
+  const microphones = devices.filter((d) => d.kind === 'audioinput')
+  const speakers = devices.filter((d) => d.kind === 'audiooutput')
+
+  const handleCameraChange = (cameraId: string) => {
+    const next = { ...selection, cameraId }
+    setSelection(next)
+    void startPreview(next)
+  }
+
+  const handleMicChange = (microphoneId: string) => {
+    const next = { ...selection, microphoneId }
+    setSelection(next)
+    void startPreview(next)
+  }
+
+  const handleSpeakerChange = (speakerId: string) => {
+    setSelection((prev) => ({ ...prev, speakerId }))
+  }
+
+  const handleConfirm = () => {
+    if (!selection.cameraId) return
+    stopPreview()
+    onConfirm(selection)
+  }
+
+  const handleCancel = () => {
+    stopPreview()
+    onCancel()
+  }
+
+  const testSpeaker = async () => {
+    const ctx = new AudioContext()
+    const oscillator = ctx.createOscillator()
+    const gain = ctx.createGain()
+    oscillator.connect(gain)
+    gain.connect(ctx.destination)
+    oscillator.frequency.value = 440
+    gain.gain.value = 0.1
+    oscillator.start()
+    oscillator.stop(ctx.currentTime + 0.3)
+    await ctx.close()
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="glass-panel mx-4 w-full max-w-lg rounded-2xl p-6 shadow-2xl">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold">Choose devices for this scene</h2>
+          <p className="text-sm text-muted-foreground">
+            These devices apply only to the new scene and won&apos;t change your current live setup
+            until you switch to it.
+          </p>
+          {permissionError && (
+            <p className="mt-2 text-sm text-destructive">{permissionError}</p>
+          )}
+          {isEnumerating && (
+            <p className="mt-2 text-sm text-muted-foreground">Detecting devices…</p>
+          )}
+        </div>
+
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+              <Camera className="h-3.5 w-3.5" />
+              Camera
+            </Label>
+            <CameraPreview stream={previewStream} enabled />
+            <Select
+              value={selection.cameraId ?? undefined}
+              onValueChange={handleCameraChange}
+              disabled={isEnumerating || cameras.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={cameras.length === 0 ? 'No cameras found' : 'Select camera'} />
+              </SelectTrigger>
+              <SelectContent>
+                {cameras.map((d) => (
+                  <SelectItem key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+              <Mic className="h-3.5 w-3.5" />
+              Microphone
+            </Label>
+            <AudioMeter level={audioLevel} muted={false} className="h-8" />
+            <Select
+              value={selection.microphoneId ?? undefined}
+              onValueChange={handleMicChange}
+              disabled={isEnumerating || microphones.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={microphones.length === 0 ? 'No microphones found' : 'Select microphone'}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {microphones.map((d) => (
+                  <SelectItem key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+              <Speaker className="h-3.5 w-3.5" />
+              Speaker
+            </Label>
+            <div className="flex gap-2">
+              <Select
+                value={selection.speakerId ?? undefined}
+                onValueChange={handleSpeakerChange}
+                disabled={isEnumerating || speakers.length === 0}
+              >
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder={speakers.length === 0 ? 'No speakers found' : 'Select speaker'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {speakers.map((d) => (
+                    <SelectItem key={d.deviceId} value={d.deviceId}>
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="icon" onClick={() => void testSpeaker()} aria-label="Test speaker">
+                <Volume2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-between">
+          <Button type="button" variant="ghost" onClick={handleCancel}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleConfirm} disabled={!selection.cameraId}>
+            Save devices
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}

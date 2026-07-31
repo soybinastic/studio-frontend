@@ -51,9 +51,15 @@ export function useGraphicsStore(sessionId: string, isHost: boolean) {
     [isHost, sync],
   )
 
+  const applyGraphics = useCallback((state: Partial<GraphicsState> | null) => {
+    skipPollUntilRef.current = Date.now() + POLL_SKIP_MS
+    setGraphics(mergeGraphicsState(emptyGraphicsState(), state ?? {}))
+  }, [])
+
   return {
     graphics,
     updateLayer,
+    applyGraphics,
     isSyncing: sync.isSyncing,
     refresh,
   }
