@@ -57,11 +57,22 @@ export interface Recording {
   stopped_at: string | null
 }
 
+export interface StreamDestination {
+  destination_id: string
+  url: string
+  label: string
+  status: 'LIVE' | 'STOPPED' | 'FAILED'
+  started_at: string
+  stopped_at: string | null
+}
+
 export interface Stream {
   stream_id: string
   session_id: string
   destination_type: 'RTMP' | 'HLS'
   destination_url: string
+  destination_urls: string[]
+  destinations: StreamDestination[]
   output_path: string
   status: 'LIVE' | 'STOPPED' | 'FAILED'
   started_at: string
@@ -83,6 +94,7 @@ export interface IngestStatus {
   streaming_active: boolean
   streaming_destination_type: string | null
   streaming_destination_url: string | null
+  streaming_destination_urls?: string[]
   participants: Array<{
     participant_peer_id: string
     audio_buffers: number

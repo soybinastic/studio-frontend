@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { endSession, getSession, updateLayout } from '@/api/sessions'
 import { listRecordings, startRecording, stopRecording } from '@/api/recordings'
-import { listStreams, startStream, stopStream } from '@/api/streaming'
+import { listStreams, startStream, stopStream, type StreamDestinationInput } from '@/api/streaming'
 import { ApiError } from '@/api/client'
 import type { LayoutType, Recording, Stream } from '@/types/session'
 
@@ -73,15 +73,26 @@ export function useHostControls(sessionId: string, enabled: boolean) {
 
   const handleStartStream = async (
     destinationType: 'RTMP' | 'HLS',
-    destinationUrl?: string,
+    destinations?: StreamDestinationInput[],
   ) => {
     setLoading(true)
     try {
-      await startStream(sessionId, {
-        destination_type: destinationType,
-        destination_url: destinationUrl,
-      })
-      toast.success(`${destinationType} stream started`)
+      if (destinationType === 'HLS') {
+        await startStream(sessionId, { destination_type: 'HLS' })
+      } else {
+        await startStream(sessionId, {
+          destination_type: 'RTMP',
+          destinations: destinations?.filter((item) => item.url.trim()),
+        })
+      }
+      const count = destinations?.filter((item) => item.url.trim()).length ?? 0
+      toast.success(
+        destinationType === 'HLS'
+          ? 'HLS stream started'
+          : count > 1
+            ? `Streaming to ${count} destinations`
+            : 'RTMP stream started',
+      )
       await refresh()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Failed to start stream')
