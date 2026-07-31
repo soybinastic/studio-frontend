@@ -3,6 +3,10 @@ import { backgroundShouldShow } from '@/lib/graphics'
 import { PreviewParticipant } from '@/components/studio/preview/PreviewParticipant'
 import { PreviewGraphicsLayer } from '@/components/studio/preview/PreviewGraphicsLayer'
 import { PreviewCountdownLayer } from '@/components/studio/preview/PreviewCountdownLayer'
+import {
+  BackgroundMusicIndicator,
+  type PreviewBackgroundMusicState,
+} from '@/components/studio/preview/BackgroundMusicIndicator'
 import type { CountdownState, LayoutType } from '@/types/session'
 import type { StudioParticipant } from '@/types/participants'
 import type { GraphicsState } from '@/types/graphics'
@@ -13,13 +17,20 @@ interface PreviewCanvasProps {
   participants: StudioParticipant[]
   graphics: GraphicsState | null
   countdownState?: CountdownState | null
+  backgroundMusic?: PreviewBackgroundMusicState | null
 }
 
 /**
  * HTML preview canvas — approximates layout visually for WYSIWYG.
  * Actual positioning/scaling/cropping is handled by the compositor backend.
  */
-export function PreviewCanvas({ layout, participants, graphics, countdownState }: PreviewCanvasProps) {
+export function PreviewCanvas({
+  layout,
+  participants,
+  graphics,
+  countdownState,
+  backgroundMusic,
+}: PreviewCanvasProps) {
   const meta = getLayoutMeta(layout)
   const visible = participants.filter((p) => !p.isHidden)
   const maxTiles = layout === 'GRID' ? 9 : visible.length
@@ -117,6 +128,7 @@ export function PreviewCanvas({ layout, participants, graphics, countdownState }
 
         <PreviewGraphicsLayer layout={layout} graphics={graphics} variant="overlay" />
         <PreviewCountdownLayer countdownState={countdownState ?? null} />
+        <BackgroundMusicIndicator backgroundMusic={backgroundMusic ?? null} />
 
         <div className="absolute left-2 top-2 z-20 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white/70">
           {meta.label}

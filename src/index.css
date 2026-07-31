@@ -120,4 +120,19 @@
   .animate-marquee-reverse {
     animation: marquee-reverse 12s linear infinite;
   }
+
+  @keyframes bgm-eq {
+    0%,
+    100% {
+      transform: scaleY(0.35);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
+
+  .animate-bgm-eq {
+    animation: bgm-eq 0.75s ease-in-out infinite;
+    transform-origin: bottom;
+  }
 }

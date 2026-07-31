@@ -1,0 +1,119 @@
+import { useState } from 'react'
+import { Check, ChevronDown, ChevronUp, Disc3 } from 'lucide-react'
+import {
+  BACKGROUND_MUSIC_PRESETS,
+  DEFAULT_BACKGROUND_MUSIC_PRESETS,
+  type BackgroundMusicPreset,
+} from '@/lib/backgroundMusicPresets'
+import { cn } from '@/lib/utils'
+
+interface BackgroundMusicPickerProps {
+  selectedAssetId?: string | null
+  disabled?: boolean
+  onSelect: (preset: BackgroundMusicPreset) => void
+}
+
+function PresetRow({
+  preset,
+  isSelected,
+  disabled,
+  onSelect,
+}: {
+  preset: BackgroundMusicPreset
+  isSelected: boolean
+  disabled?: boolean
+  onSelect: (preset: BackgroundMusicPreset) => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onSelect(preset)}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-md border px-2 py-2 text-left transition-colors',
+        isSelected
+          ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+          : 'border-border/60 hover:border-primary/40 hover:bg-muted/40',
+        disabled && 'cursor-not-allowed opacity-50',
+      )}
+      aria-label={`Select ${preset.title}`}
+      aria-pressed={isSelected}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
+        <Disc3 className={cn('h-4 w-4', isSelected ? 'text-primary' : 'text-muted-foreground')} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium">{preset.title}</span>
+        {preset.default ? (
+          <span className="block text-[10px] text-muted-foreground">Studio track</span>
+        ) : null}
+      </span>
+      {isSelected ? <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden /> : null}
+    </button>
+  )
+}
+
+export function BackgroundMusicPicker({
+  selectedAssetId,
+  disabled,
+  onSelect,
+}: BackgroundMusicPickerProps) {
+  const [showMore, setShowMore] = useState(false)
+  const extraPresets = BACKGROUND_MUSIC_PRESETS.filter((preset) => !preset.default)
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        Studio tracks
+      </p>
+      <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+        {DEFAULT_BACKGROUND_MUSIC_PRESETS.map((preset) => (
+          <PresetRow
+            key={preset.uuid}
+            preset={preset}
+            isSelected={selectedAssetId === preset.uuid}
+            disabled={disabled}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
+
+      {extraPresets.length > 0 ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setShowMore((open) => !open)}
+            className="flex w-full items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            {showMore ? (
+              <>
+                Hide more tracks
+                <ChevronUp className="h-3 w-3" />
+              </>
+            ) : (
+              <>
+                Show more tracks ({extraPresets.length})
+                <ChevronDown className="h-3 w-3" />
+              </>
+            )}
+          </button>
+
+          {showMore ? (
+            <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+              {extraPresets.map((preset) => (
+                <PresetRow
+                  key={preset.uuid}
+                  preset={preset}
+                  isSelected={selectedAssetId === preset.uuid}
+                  disabled={disabled}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}

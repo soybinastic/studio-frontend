@@ -1,6 +1,6 @@
 export type OutputState = 'idle' | 'starting' | 'active' | 'stopping' | 'disabled'
 
-export type SidebarTab = 'graphics' | 'participants' | 'sources'
+export type SidebarTab = 'graphics' | 'participants' | 'sources' | 'audio'
 
 export interface RecordingState {
   status: OutputState

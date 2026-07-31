@@ -231,6 +231,10 @@ export function useSceneStore(
     )
   }, [])
 
+  const patchScene = useCallback((updated: Scene) => {
+    setScenes((prev) => prev.map((scene) => (scene.scene_id === updated.scene_id ? updated : scene)))
+  }, [])
+
   return {
     scenes,
     activeSceneId,
@@ -245,6 +249,7 @@ export function useSceneStore(
     removeScene,
     activateScene,
     patchActiveSceneSources,
+    patchScene,
   }
 }
 

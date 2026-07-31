@@ -10,12 +10,19 @@ export interface SceneSourcesConfig {
   assignments?: Record<string, string>
 }
 
+export interface BackgroundMusicTrack {
+  asset_id: string
+  url: string
+  title: string
+}
+
 export interface BackgroundMusicConfig {
   version: 1
   enabled: boolean
-  track: { url: string; title?: string } | null
+  track: BackgroundMusicTrack | null
   volume: number
   loop: boolean
+  muted: boolean
 }
 
 export interface SceneCountdownConfig {
@@ -84,4 +91,5 @@ export interface UpdateSceneRequest {
   sources?: {
     assignments?: Record<string, string>
   }
+  background_music?: Partial<BackgroundMusicConfig>
 }
