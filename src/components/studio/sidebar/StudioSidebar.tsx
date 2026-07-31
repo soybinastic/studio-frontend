@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Image, Layers, Users, Plus } from 'lucide-react'
+import { Image, Music2, Plus, Users } from 'lucide-react'
+import { BackgroundMusicPanel } from '@/components/studio/audio/BackgroundMusicPanel'
 import { GraphicsPanel } from '@/components/studio/sidebar/GraphicsPanel'
 import { SourceTileList } from '@/components/studio/sidebar/SourceTileList'
 import { SourceCard, SOURCE_TYPES } from '@/components/studio/sidebar/SourceCard'
 import { InvitePanel } from '@/components/studio/InvitePanel'
+import type { BackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import type { LayoutType } from '@/types/session'
 import type { SidebarTab } from '@/types/studio'
 import type { StudioTileSource } from '@/types/participants'
@@ -16,6 +18,21 @@ interface StudioSidebarProps {
   tileSources: StudioTileSource[]
   usingSceneOverride: boolean
   graphics: GraphicsState | null
+  backgroundMusicStore: Pick<
+    BackgroundMusicStore,
+    | 'config'
+    | 'runtime'
+    | 'isMutating'
+    | 'activeSceneName'
+    | 'selectPreset'
+    | 'removeTrack'
+    | 'play'
+    | 'pause'
+    | 'resume'
+    | 'stop'
+    | 'setVolume'
+    | 'setMuted'
+  >
   inviteUrl?: string
   onGraphicUpdate: (layer: GraphicLayerKey, value: GraphicsState[GraphicLayerKey]) => void
   onReorderSources: (fromIndex: number, toIndex: number) => void
@@ -27,10 +44,11 @@ interface StudioSidebarProps {
   isSyncing?: boolean
 }
 
-const TABS: { id: SidebarTab; label: string; icon: typeof Layers }[] = [
+const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
   { id: 'graphics', label: 'Graphics', icon: Image },
-  { id: 'participants', label: 'Participants', icon: Users },
+  { id: 'participants', label: 'People', icon: Users },
   { id: 'sources', label: 'Sources', icon: Plus },
+  { id: 'audio', label: 'Audio', icon: Music2 },
 ]
 
 export function StudioSidebar({
@@ -39,6 +57,7 @@ export function StudioSidebar({
   tileSources,
   usingSceneOverride,
   graphics,
+  backgroundMusicStore,
   inviteUrl,
   onGraphicUpdate,
   onReorderSources,
@@ -69,7 +88,7 @@ export function StudioSidebar({
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-medium transition-colors',
+                    'flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition-colors',
                     activeTab === tab.id
                       ? 'border-b-2 border-primary text-primary'
                       : 'text-muted-foreground hover:text-foreground',
@@ -118,6 +137,10 @@ export function StudioSidebar({
                     <SourceCard key={source.id} source={source} onAdd={onAddSource} />
                   ))}
                 </div>
+              )}
+
+              {activeTab === 'audio' && (
+                <BackgroundMusicPanel isHost={isHost} store={backgroundMusicStore} />
               )}
             </div>
           </>

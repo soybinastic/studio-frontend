@@ -20,6 +20,7 @@ import { useBackendSync } from '@/hooks/useBackendSync'
 import { useOutputStore } from '@/hooks/useOutputStore'
 import { useTileOrderStore } from '@/hooks/useTileOrderStore'
 import { useGraphicsStore } from '@/hooks/useGraphicsStore'
+import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
@@ -50,6 +51,13 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const backendSync = useBackendSync(sessionId, context.isHost)
   const graphicsStore = useGraphicsStore(sessionId, context.isHost)
   const sceneStore = useSceneStore(sessionId, context.isHost, outputStore.setCountdownState)
+  const backgroundMusicStore = useBackgroundMusicStore({
+    sessionId,
+    isHost: context.isHost,
+    activeSceneId: sceneStore.activeSceneId,
+    scenes: sceneStore.scenes,
+    onSceneUpdated: sceneStore.patchScene,
+  })
   const prevCountdownActive = useRef(false)
 
   const {
@@ -170,12 +178,13 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       outputStore.setCountdownState(null)
       outputStore.setLayout(result.layout)
       graphicsStore.applyGraphics(result.graphics_config)
+      backgroundMusicStore.applySceneConfig(result.scene.background_music)
 
       if (hasSceneDevices(result.devices)) {
         await applyLiveDevices(result.devices)
       }
     },
-    [sceneStore, outputStore, graphicsStore, applyLiveDevices],
+    [sceneStore, outputStore, graphicsStore, backgroundMusicStore, applyLiveDevices],
   )
 
   useEffect(() => {
@@ -187,6 +196,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         if (activeScene) {
           if (activeScene.layout) outputStore.setLayout(activeScene.layout)
           graphicsStore.applyGraphics(activeScene.graphics_config)
+          backgroundMusicStore.applySceneConfig(activeScene.background_music)
           if (context.isHost && hasSceneDevices(activeScene.devices)) {
             await applyLiveDevices(activeScene.devices)
           }
@@ -200,6 +210,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     sceneStore,
     outputStore,
     graphicsStore,
+    backgroundMusicStore,
     context.isHost,
     applyLiveDevices,
   ])
@@ -325,6 +336,20 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     navigate('/')
   }, [sessionId, leave, navigate])
 
+  const previewBackgroundMusic = useMemo(
+    () => ({
+      hasTrack: Boolean(backgroundMusicStore.config.track),
+      trackTitle: backgroundMusicStore.config.track?.title ?? null,
+      playbackState: backgroundMusicStore.runtime.playback_state,
+      muted: backgroundMusicStore.config.muted,
+    }),
+    [
+      backgroundMusicStore.config.track,
+      backgroundMusicStore.config.muted,
+      backgroundMusicStore.runtime.playback_state,
+    ],
+  )
+
   if (!roomEnabled && !showDeviceSetup) {
     return (
       <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center">
@@ -396,6 +421,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
               participants={previewParticipants}
               graphics={graphicsStore.graphics}
               countdownState={outputStore.countdownState}
+              backgroundMusic={previewBackgroundMusic}
             />
 
             {context.isHost && (
@@ -426,6 +452,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           tileSources={tileOrder.tileSources}
           usingSceneOverride={tileOrder.usingSceneOverride}
           graphics={graphicsStore.graphics}
+          backgroundMusicStore={backgroundMusicStore}
           inviteUrl={context.isHost ? context.inviteUrl : undefined}
           onGraphicUpdate={(layer, value) => void graphicsStore.updateLayer(layer, value)}
           onReorderSources={(from, to) => void tileOrder.reorderSources(from, to)}
@@ -433,7 +460,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onPin={tileOrder.togglePin}
           onHide={(sourceId) => void tileOrder.toggleHide(sourceId)}
           onMute={() => void toggleMic()}
-          isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing}
+          isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing || backgroundMusicStore.isMutating}
         />
       </div>
     </div>
