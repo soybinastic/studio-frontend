@@ -22,8 +22,10 @@ interface PreviewCanvasProps {
 export function PreviewCanvas({ layout, participants, graphics, countdownState }: PreviewCanvasProps) {
   const meta = getLayoutMeta(layout)
   const visible = participants.filter((p) => !p.isHidden)
-  const host = visible.find((p) => p.isHost)
-  const guests = visible.filter((p) => !p.isHost)
+  const maxTiles = layout === 'GRID' ? 9 : visible.length
+  const tiles = visible.slice(0, maxTiles)
+  const primary = tiles[0]
+  const others = tiles.slice(1)
 
   const showBackground = backgroundShouldShow(graphics?.background ?? null, layout)
   // Inset camera tiles when background is active so margins show it (matches compositor BACKGROUND_TILE_INSET).
@@ -41,13 +43,13 @@ export function PreviewCanvas({ layout, participants, graphics, countdownState }
             participantInset && 'p-[3%]',
           )}
         >
-          {layout === 'FULLSCREEN' && host && (
-            <PreviewParticipant participant={host} className="h-full w-full" />
+          {layout === 'FULLSCREEN' && primary && (
+            <PreviewParticipant participant={primary} className="h-full w-full" />
           )}
 
           {(layout === 'CONTAIN' || layout === 'COVER' || layout === 'GRID') && (
             <div className="grid h-full w-full grid-cols-2 gap-0.5 p-0.5">
-              {visible.map((p) => (
+              {tiles.map((p) => (
                 <PreviewParticipant key={p.peerId} participant={p} className="min-h-0" />
               ))}
             </div>
@@ -55,7 +57,7 @@ export function PreviewCanvas({ layout, participants, graphics, countdownState }
 
           {(layout === 'SIDE_BY_SIDE' || layout === 'HALFSCREEN') && (
             <div className="flex h-full w-full gap-0.5 p-0.5">
-              {visible.slice(0, 2).map((p) => (
+              {tiles.slice(0, 2).map((p) => (
                 <PreviewParticipant key={p.peerId} participant={p} className="flex-1" />
               ))}
             </div>
@@ -63,10 +65,10 @@ export function PreviewCanvas({ layout, participants, graphics, countdownState }
 
           {layout === 'SPOTLIGHT' && (
             <div className="flex h-full w-full gap-0.5 p-0.5">
-              {host && <PreviewParticipant participant={host} className="flex-[3]" />}
-              {guests.length > 0 && (
+              {primary && <PreviewParticipant participant={primary} className="flex-[3]" />}
+              {others.length > 0 && (
                 <div className="flex flex-[1] flex-col gap-0.5">
-                  {guests.slice(0, 3).map((p) => (
+                  {others.slice(0, 3).map((p) => (
                     <PreviewParticipant key={p.peerId} participant={p} className="flex-1" />
                   ))}
                 </div>
@@ -76,10 +78,10 @@ export function PreviewCanvas({ layout, participants, graphics, countdownState }
 
           {layout === 'THUMBNAIL' && (
             <div className="flex h-full w-full flex-col gap-0.5 p-0.5">
-              {host && <PreviewParticipant participant={host} className="flex-[3]" />}
-              {guests.length > 0 && (
+              {primary && <PreviewParticipant participant={primary} className="flex-[3]" />}
+              {others.length > 0 && (
                 <div className="flex flex-[1] gap-0.5">
-                  {guests.slice(0, 4).map((p) => (
+                  {others.slice(0, 4).map((p) => (
                     <PreviewParticipant key={p.peerId} participant={p} className="flex-1" />
                   ))}
                 </div>
@@ -89,10 +91,10 @@ export function PreviewCanvas({ layout, participants, graphics, countdownState }
 
           {layout === 'CINEMA' && (
             <div className="flex h-full w-full flex-col gap-0.5 p-0.5">
-              {host && <PreviewParticipant participant={host} className="flex-[4]" />}
-              {guests.length > 0 && (
+              {primary && <PreviewParticipant participant={primary} className="flex-[4]" />}
+              {others.length > 0 && (
                 <div className="flex flex-[1] gap-0.5 overflow-x-auto">
-                  {guests.map((p) => (
+                  {others.map((p) => (
                     <PreviewParticipant key={p.peerId} participant={p} className="min-w-[30%] flex-1" />
                   ))}
                 </div>
@@ -102,10 +104,10 @@ export function PreviewCanvas({ layout, participants, graphics, countdownState }
 
           {(layout === 'PICTURE_IN_PICTURE' || layout === 'OVERLAY') && (
             <div className="relative h-full w-full">
-              {host && <PreviewParticipant participant={host} className="h-full w-full" />}
-              {guests.length > 0 && (
+              {primary && <PreviewParticipant participant={primary} className="h-full w-full" />}
+              {others.length > 0 && (
                 <PreviewParticipant
-                  participant={guests[0]}
+                  participant={others[0]}
                   className="absolute bottom-3 right-3 h-[25%] w-[35%] rounded-lg shadow-lg ring-2 ring-white/20"
                 />
               )}

@@ -215,6 +215,22 @@ export function useSceneStore(
     [isHost, sessionId, activeSceneId, onCountdownState],
   )
 
+  const patchActiveSceneSources = useCallback((assignments: Record<string, string>) => {
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.is_active
+          ? {
+              ...scene,
+              sources: {
+                ...scene.sources,
+                assignments,
+              },
+            }
+          : scene,
+      ),
+    )
+  }, [])
+
   return {
     scenes,
     activeSceneId,
@@ -228,6 +244,7 @@ export function useSceneStore(
     renameScene,
     removeScene,
     activateScene,
+    patchActiveSceneSources,
   }
 }
 

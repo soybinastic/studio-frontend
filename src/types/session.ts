@@ -41,6 +41,12 @@ export interface Session {
   session_id: string
   room_id: string
   host_display_name: string
+  host_peer_id: string | null
+  tile_order_config: {
+    version: number
+    assignments: Record<string, string>
+  }
+  hidden_source_ids: string[]
   layout: LayoutType
   status: SessionStatus
   active_scene_id: string | null
