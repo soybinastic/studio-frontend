@@ -5,6 +5,21 @@ import protooClient from 'protoo-client'
 import { getDeviceInfo } from '@/media/deviceInfo'
 import type { ConnectionState, ParticipantMedia } from '@/types/session'
 
+const MIC_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: false,
+  autoGainControl: false,
+  sampleRate: { ideal: 48000 },
+  channelCount: { ideal: 1 },
+}
+
+const OPUS_CODEC_OPTIONS = {
+  opusDtx: false,
+  opusFec: true,
+  opusNack: true,
+  opusMaxAverageBitrate: 64000,
+}
+
 export interface RoomClientOptions {
   roomId: string
   peerId: string
@@ -29,6 +44,7 @@ export class RoomClient {
   private sendTransport: MediasoupTypes.Transport | null = null
   private recvTransport: MediasoupTypes.Transport | null = null
   private micProducer: MediasoupTypes.Producer | null = null
+  private micStream: MediaStream | null = null
   private webcamProducer: MediasoupTypes.Producer | null = null
   private readonly remoteParticipants = new Map<string, RemoteParticipant>()
   private readonly consumingQueue = new AwaitQueue()
@@ -98,12 +114,14 @@ export class RoomClient {
       return
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS })
+    this.micStream = stream
     const track = stream.getAudioTracks()[0]
 
     this.micProducer = await this.sendTransport.produce({
       track,
       appData: { source: 'audio' },
+      codecOptions: OPUS_CODEC_OPTIONS,
     })
 
     this.micEnabled = true
@@ -120,6 +138,7 @@ export class RoomClient {
     if (!this.micProducer) return
     this.micProducer.close()
     this.micProducer = null
+    this.stopMicStream()
     this.micEnabled = false
     this.emitParticipants()
   }
@@ -182,6 +201,7 @@ export class RoomClient {
     this.closed = true
 
     this.micProducer?.close()
+    this.stopMicStream()
     this.webcamProducer?.close()
     this.sendTransport?.close()
     this.recvTransport?.close()
@@ -207,15 +227,7 @@ export class RoomClient {
 
     await this.device.load({ routerRtpCapabilities })
 
-    // Autoplay unlock hack for remote audio
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const track = stream.getAudioTracks()[0]
-      track.enabled = false
-      window.setTimeout(() => track.stop(), 120000)
-    } catch {
-      // ignore — user may grant later
-    }
+    this.unlockAutoplay()
 
     const sendInfo = (await this.protoo.request('createWebRtcTransport', {
       forceTcp: false,
@@ -455,6 +467,28 @@ export class RoomClient {
 
   private setState(state: ConnectionState): void {
     this.options.onStateChange?.(state)
+  }
+
+  private stopMicStream(): void {
+    if (!this.micStream) return
+    for (const track of this.micStream.getTracks()) {
+      track.stop()
+    }
+    this.micStream = null
+  }
+
+  private unlockAutoplay(): void {
+    try {
+      const audioContext = new AudioContext()
+      const buffer = audioContext.createBuffer(1, 1, 22050)
+      const source = audioContext.createBufferSource()
+      source.buffer = buffer
+      source.connect(audioContext.destination)
+      source.start(0)
+      void audioContext.close()
+    } catch {
+      // ignore — user may grant later
+    }
   }
 }
 
