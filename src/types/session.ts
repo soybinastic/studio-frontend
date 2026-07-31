@@ -13,6 +13,14 @@ export type LayoutType =
 
 export type SessionStatus = 'CREATED' | 'ACTIVE' | 'ENDED'
 
+export interface CountdownState {
+  active: boolean
+  started_at: string
+  duration_seconds: number
+  target_scene_id: string
+  source_scene_id: string
+}
+
 export interface SessionCreateRequest {
   host_display_name: string
   layout?: LayoutType
@@ -35,6 +43,8 @@ export interface Session {
   host_display_name: string
   layout: LayoutType
   status: SessionStatus
+  active_scene_id: string | null
+  countdown_state: CountdownState | null
   created_at: string
   ended_at: string | null
 }

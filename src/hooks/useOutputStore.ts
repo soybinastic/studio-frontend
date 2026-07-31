@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getSession } from '@/api/sessions'
 import { listRecordings } from '@/api/recordings'
 import { listStreams } from '@/api/streaming'
 import { ApiError } from '@/api/client'
-import type { LayoutType, Recording, Stream } from '@/types/session'
+import type { CountdownState, LayoutType, Recording, Stream } from '@/types/session'
 import type { GraphicsState } from '@/types/graphics'
 import type { OutputState } from '@/types/studio'
 import { deriveOutputState } from '@/hooks/useBackendSync'
 
 const SESSION_POLL_MS = 3000
+const COUNTDOWN_POLL_MS = 1000
 
 interface UseOutputStoreOptions {
   sessionId: string
@@ -23,17 +24,21 @@ export function useOutputStore({
   initialLayout = 'CONTAIN',
 }: UseOutputStoreOptions) {
   const [layout, setLayout] = useState<LayoutType>(initialLayout)
+  const [countdownState, setCountdownState] = useState<CountdownState | null>(null)
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [streams, setStreams] = useState<Stream[]>([])
   const [graphics, setGraphics] = useState<GraphicsState | null>(null)
   const [recordingAction, setRecordingAction] = useState<'starting' | 'stopping' | null>(null)
   const [streamingAction, setStreamingAction] = useState<'starting' | 'stopping' | null>(null)
+  const countdownStateRef = useRef(countdownState)
+  countdownStateRef.current = countdownState
 
   const refreshSession = useCallback(async () => {
     if (!sessionId) return
     try {
       const session = await getSession(sessionId)
       setLayout(session.layout)
+      setCountdownState(session.countdown_state)
     } catch (err) {
       if (err instanceof ApiError && isHost) toast.error(err.message)
     }
@@ -57,12 +62,13 @@ export function useOutputStore({
     await Promise.all([refreshSession(), refreshHostOutput()])
   }, [refreshSession, refreshHostOutput])
 
-  // Layout sync — all participants poll so guest previews stay in sync with host
+  // Layout + countdown sync — all participants poll
   useEffect(() => {
     void refreshSession()
-    const interval = window.setInterval(() => void refreshSession(), SESSION_POLL_MS)
+    const pollMs = countdownStateRef.current?.active ? COUNTDOWN_POLL_MS : SESSION_POLL_MS
+    const interval = window.setInterval(() => void refreshSession(), pollMs)
     return () => window.clearInterval(interval)
-  }, [refreshSession])
+  }, [refreshSession, countdownState?.active])
 
   // Recording/stream state — host only
   useEffect(() => {
@@ -90,6 +96,8 @@ export function useOutputStore({
   return {
     layout,
     setLayout,
+    countdownState,
+    setCountdownState,
     graphics,
     setGraphics,
     activeRecording,
@@ -99,5 +107,6 @@ export function useOutputStore({
     setRecordingAction,
     setStreamingAction,
     refresh,
+    refreshSession,
   }
 }

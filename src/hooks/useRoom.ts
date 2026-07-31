@@ -55,21 +55,12 @@ export function useRoom({
       const client = clientRef.current
       if (!client) return
 
-      client.setDeviceConstraints({
+      await client.replaceDevices({
         cameraId: selection.cameraId,
         microphoneId: selection.microphoneId,
       })
-
-      const wasWebcam = clientRef.current
-      if (isPublished) {
-        await client.toggleWebcam()
-        await client.toggleWebcam()
-        await client.toggleMic()
-        await client.toggleMic()
-      }
-      void wasWebcam
     },
-    [isPublished],
+    [],
   )
 
   useEffect(() => {
