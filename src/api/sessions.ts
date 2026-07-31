@@ -31,6 +31,24 @@ export function updateLayout(sessionId: string, layout: LayoutType) {
   })
 }
 
+export interface UpdateSessionTileConfigRequest {
+  host_peer_id?: string | null
+  tile_order_config?: {
+    assignments?: Record<string, string>
+  }
+  hidden_source_ids?: string[]
+}
+
+export function updateSessionTileConfig(
+  sessionId: string,
+  body: UpdateSessionTileConfigRequest,
+) {
+  return apiRequest<Session>(`/sessions/${sessionId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
 export function validateInvite(sessionId: string, inviteToken: string) {
   return apiRequest<InviteValidationResponse>(
     `/sessions/${sessionId}/validate-invite/`,

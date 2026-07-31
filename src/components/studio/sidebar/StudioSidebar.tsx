@@ -1,25 +1,28 @@
 import { useState } from 'react'
 import { Image, Layers, Users, Plus } from 'lucide-react'
 import { GraphicsPanel } from '@/components/studio/sidebar/GraphicsPanel'
-import { ParticipantCard } from '@/components/studio/sidebar/ParticipantCard'
+import { SourceTileList } from '@/components/studio/sidebar/SourceTileList'
 import { SourceCard, SOURCE_TYPES } from '@/components/studio/sidebar/SourceCard'
 import { InvitePanel } from '@/components/studio/InvitePanel'
 import type { LayoutType } from '@/types/session'
 import type { SidebarTab } from '@/types/studio'
-import type { StudioParticipant } from '@/types/participants'
+import type { StudioTileSource } from '@/types/participants'
 import type { GraphicLayerKey, GraphicsState } from '@/types/graphics'
 import { cn } from '@/lib/utils'
 
 interface StudioSidebarProps {
   layout: LayoutType
   isHost: boolean
-  participants: StudioParticipant[]
+  tileSources: StudioTileSource[]
+  usingSceneOverride: boolean
   graphics: GraphicsState | null
   inviteUrl?: string
   onGraphicUpdate: (layer: GraphicLayerKey, value: GraphicsState[GraphicLayerKey]) => void
-  onPin: (peerId: string) => void
-  onHide: (peerId: string) => void
-  onMute?: (peerId: string) => void
+  onReorderSources: (fromIndex: number, toIndex: number) => void
+  onResetTileOrder: () => void
+  onPin: (sourceId: string) => void
+  onHide: (sourceId: string) => void
+  onMute?: (sourceId: string) => void
   onAddSource?: (sourceId: string) => void
   isSyncing?: boolean
 }
@@ -33,10 +36,13 @@ const TABS: { id: SidebarTab; label: string; icon: typeof Layers }[] = [
 export function StudioSidebar({
   layout,
   isHost,
-  participants,
+  tileSources,
+  usingSceneOverride,
   graphics,
   inviteUrl,
   onGraphicUpdate,
+  onReorderSources,
+  onResetTileOrder,
   onPin,
   onHide,
   onMute,
@@ -92,21 +98,17 @@ export function StudioSidebar({
                     <InvitePanel inviteUrl={inviteUrl} className="rounded-lg border border-border/60 p-3" />
                   )}
 
-                  {participants.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-muted-foreground">
-                      No participants yet
-                    </p>
-                  ) : (
-                    participants.map((p) => (
-                      <ParticipantCard
-                        key={p.peerId}
-                        participant={p}
-                        onPin={onPin}
-                        onHide={onHide}
-                        onMute={onMute}
-                      />
-                    ))
-                  )}
+                  <SourceTileList
+                    sources={tileSources}
+                    isHost={isHost}
+                    usingSceneOverride={usingSceneOverride}
+                    isSyncing={isSyncing}
+                    onReorder={onReorderSources}
+                    onReset={onResetTileOrder}
+                    onPin={onPin}
+                    onHide={onHide}
+                    onMute={onMute}
+                  />
                 </div>
               )}
 

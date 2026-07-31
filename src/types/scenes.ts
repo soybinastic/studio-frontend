@@ -7,6 +7,7 @@ export type SceneType = 'CAMERA' | 'COUNTDOWN'
 export interface SceneSourcesConfig {
   version: 1
   sources: unknown[]
+  assignments?: Record<string, string>
 }
 
 export interface BackgroundMusicConfig {
@@ -80,4 +81,7 @@ export interface UpdateSceneRequest {
   layout?: LayoutType
   graphics_config?: Partial<GraphicsState>
   devices?: Partial<DeviceSelection>
+  sources?: {
+    assignments?: Record<string, string>
+  }
 }

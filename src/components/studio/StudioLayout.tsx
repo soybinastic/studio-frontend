@@ -18,9 +18,10 @@ import { countdownSecondsRemaining } from '@/lib/countdown'
 import { useRoom } from '@/hooks/useRoom'
 import { useBackendSync } from '@/hooks/useBackendSync'
 import { useOutputStore } from '@/hooks/useOutputStore'
-import { useParticipantStore } from '@/hooks/useParticipantStore'
+import { useTileOrderStore } from '@/hooks/useTileOrderStore'
 import { useGraphicsStore } from '@/hooks/useGraphicsStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
+import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
 import type { StudioSessionContext } from '@/types/session'
@@ -80,11 +81,26 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     return hostParticipant?.peerId ?? participants.find((p) => !p.isLocal)?.peerId ?? context.peerId
   }, [context, participants])
 
-  const { studioParticipants, togglePin, toggleHide } = useParticipantStore(
-    participants,
+  const activeSceneSources = useMemo(
+    () => sceneStore.scenes.find((scene) => scene.is_active)?.sources,
+    [sceneStore.scenes],
+  )
+
+  const tileOrder = useTileOrderStore({
+    sessionId,
+    isHost: context.isHost,
     hostPeerId,
+    participants,
     connectionState,
-    context.roomId,
+    roomId: context.roomId,
+    activeSceneId: sceneStore.activeSceneId,
+    sceneSourcesConfig: activeSceneSources,
+    onSceneSourcesUpdated: sceneStore.patchActiveSceneSources,
+  })
+
+  const previewParticipants = useMemo(
+    () => tileOrder.visibleTileSources.map(tileSourceToStudioParticipant),
+    [tileOrder.visibleTileSources],
   )
 
   useEffect(() => {
@@ -128,8 +144,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
 
   const subtitle = useMemo(
     () =>
-      `${studioParticipants.length} participant${studioParticipants.length === 1 ? '' : 's'} · ${outputStore.layout}`,
-    [studioParticipants.length, outputStore.layout],
+      `${tileOrder.visibleTileSources.length} source${tileOrder.visibleTileSources.length === 1 ? '' : 's'} · ${outputStore.layout}`,
+    [tileOrder.visibleTileSources.length, outputStore.layout],
   )
 
   const handleLayoutChange = useCallback(
@@ -377,7 +393,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           <div className="flex flex-1 flex-col items-center justify-center p-4">
             <PreviewCanvas
               layout={outputStore.layout}
-              participants={studioParticipants}
+              participants={previewParticipants}
               graphics={graphicsStore.graphics}
               countdownState={outputStore.countdownState}
             />
@@ -407,14 +423,17 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         <StudioSidebar
           layout={outputStore.layout}
           isHost={context.isHost}
-          participants={studioParticipants}
+          tileSources={tileOrder.tileSources}
+          usingSceneOverride={tileOrder.usingSceneOverride}
           graphics={graphicsStore.graphics}
           inviteUrl={context.isHost ? context.inviteUrl : undefined}
           onGraphicUpdate={(layer, value) => void graphicsStore.updateLayer(layer, value)}
-          onPin={togglePin}
-          onHide={toggleHide}
+          onReorderSources={(from, to) => void tileOrder.reorderSources(from, to)}
+          onResetTileOrder={() => void tileOrder.resetTileOrder()}
+          onPin={tileOrder.togglePin}
+          onHide={(sourceId) => void tileOrder.toggleHide(sourceId)}
           onMute={() => void toggleMic()}
-          isSyncing={graphicsStore.isSyncing}
+          isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing}
         />
       </div>
     </div>
