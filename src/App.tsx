@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AppShell } from '@/components/layout/AppShell'
 import { ThemeProvider } from '@/components/theme-provider'
+import { StudioHeaderControlsProvider } from '@/context/StudioHeaderControlsProvider'
 import { TenantProvider } from '@/context/TenantProvider'
 import { HomePage } from '@/pages/HomePage'
 import { JoinPage } from '@/pages/JoinPage'
@@ -11,17 +12,19 @@ export default function App() {
   return (
     <ThemeProvider>
       <TenantProvider>
-        <BrowserRouter>
-          <AppShell>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/join/:sessionId" element={<JoinPage />} />
-              <Route path="/studio/:sessionId" element={<StudioPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </AppShell>
-          <Toaster richColors position="top-center" closeButton />
-        </BrowserRouter>
+        <StudioHeaderControlsProvider>
+          <BrowserRouter>
+            <AppShell>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/join/:sessionId" element={<JoinPage />} />
+                <Route path="/studio/:sessionId" element={<StudioPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </AppShell>
+            <Toaster richColors position="top-center" closeButton />
+          </BrowserRouter>
+        </StudioHeaderControlsProvider>
       </TenantProvider>
     </ThemeProvider>
   )
