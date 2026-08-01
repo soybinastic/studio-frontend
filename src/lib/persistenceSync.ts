@@ -7,6 +7,7 @@ import {
   updatePersistedScene,
   updateTenantConfiguration,
 } from '@/api/persistence'
+import { emptyGraphicsState, mergeGraphicsState } from '@/lib/graphics'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
   getPersistenceSceneId,
@@ -107,19 +108,22 @@ export async function persistGraphics(
   sessionId?: string | null,
   compositorSceneId?: string | null,
 ): Promise<void> {
-  if (!configuration) return
-  const mergedTenantGraphics = {
-    ...configuration.graphics_config,
-    ...graphics_config,
-  }
-  patchLocalConfiguration({
-    graphics_config: mergedTenantGraphics,
-  })
-  await persistConfiguration({ graphics_config })
+  if (!configuration || !sessionId || !compositorSceneId) return
 
-  if (sessionId && compositorSceneId) {
-    await persistSceneUpdate(sessionId, compositorSceneId, { graphics_config })
-  }
+  const persistenceSceneId = getPersistenceSceneId(sessionId, compositorSceneId)
+  if (!persistenceSceneId) return
+
+  const persistedScene = configuration.scenes.find((scene) => scene.scene_id === persistenceSceneId)
+  const mergedGraphics = mergeGraphicsState(
+    mergeGraphicsState(emptyGraphicsState(), persistedScene?.graphics_config ?? {}),
+    graphics_config,
+  )
+
+  patchLocalScene(persistenceSceneId, { graphics_config: mergedGraphics })
+
+  await runPersist('update scene graphics', async () => {
+    await updatePersistedScene(tenantId!, persistenceSceneId, { graphics_config })
+  })
 }
 
 export async function persistDevices(devices: Partial<DeviceSelection>): Promise<void> {

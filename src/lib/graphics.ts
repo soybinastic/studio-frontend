@@ -80,18 +80,3 @@ export function hasNonNullGraphicsLayers(state: Partial<GraphicsState> | null | 
   if (!state) return false
   return Object.values(state).some((value) => value != null)
 }
-
-/**
- * Merge scene + tenant graphics for hydration. Tenant-level edits (sidebar)
- * win over stale scene snapshots when both define a layer.
- */
-export function mergePersistedSceneGraphics(
-  sceneGraphics: Partial<GraphicsState> | null | undefined,
-  tenantGraphics: Partial<GraphicsState> | null | undefined,
-): Partial<GraphicsState> {
-  const fromScene = mergeGraphicsState(emptyGraphicsState(), sceneGraphics ?? {})
-  const tenantPatch = Object.fromEntries(
-    Object.entries(tenantGraphics ?? {}).filter(([, value]) => value != null),
-  ) as Partial<GraphicsState>
-  return mergeGraphicsState(fromScene, tenantPatch)
-}

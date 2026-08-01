@@ -3,7 +3,6 @@ import { updateGraphicsBulk } from '@/api/graphics'
 import { updateLayout, updateSessionTileConfig } from '@/api/sessions'
 import {
   hasNonNullGraphicsLayers,
-  mergePersistedSceneGraphics,
 } from '@/lib/graphics'
 import {
   getCompositorSceneId,
@@ -22,10 +21,14 @@ export async function hydrateCompositorFromPersistence(
   if (isSessionHydrated(sessionId)) return
 
   const tenantHasGraphics = hasNonNullGraphicsLayers(config.graphics_config)
+  const sceneHasGraphics = config.scenes.some((scene) =>
+    hasNonNullGraphicsLayers(scene.graphics_config),
+  )
   const hasPersistedData =
     config.scenes.length > 0 ||
     config.layout !== 'CONTAIN' ||
-    tenantHasGraphics
+    tenantHasGraphics ||
+    sceneHasGraphics
 
   if (!hasPersistedData) {
     markSessionHydrated(sessionId)
@@ -55,10 +58,7 @@ export async function hydrateCompositorFromPersistence(
       .sort((a, b) => a.sort_order - b.sort_order)
     let compositor = compositorCandidates[index]
 
-    const mergedGraphics = mergePersistedSceneGraphics(
-      persisted.graphics_config,
-      config.graphics_config,
-    )
+    const sceneGraphics = persisted.graphics_config
 
     const scenePatch: UpdateSceneRequest = {
       name: persisted.name,
@@ -67,8 +67,8 @@ export async function hydrateCompositorFromPersistence(
       sources: persisted.sources,
       background_music: persisted.background_music,
     }
-    if (hasNonNullGraphicsLayers(mergedGraphics)) {
-      scenePatch.graphics_config = mergedGraphics
+    if (hasNonNullGraphicsLayers(sceneGraphics)) {
+      scenePatch.graphics_config = sceneGraphics
     }
 
     if (compositor) {
