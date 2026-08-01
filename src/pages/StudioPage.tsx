@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { getSession } from '@/api/sessions'
 import { ApiError } from '@/api/client'
 import { StudioLayout } from '@/components/studio/StudioLayout'
+import { CmsEmbedBridgeProvider } from '@/context/CmsEmbedBridgeProvider'
 import { useTenant } from '@/context/TenantProvider'
 import { loadStudioContext } from '@/lib/studioContext'
 import type { StudioSessionContext } from '@/types/session'
@@ -12,7 +13,7 @@ import type { StudioSessionContext } from '@/types/session'
 export function StudioPage() {
   const { sessionId = '' } = useParams()
   const navigate = useNavigate()
-  const { isReady: tenantReady } = useTenant()
+  const { isReady: tenantReady, tenantId } = useTenant()
   const [context, setContext] = useState<StudioSessionContext | null>(null)
   const [bootstrapping, setBootstrapping] = useState(true)
 
@@ -64,5 +65,9 @@ export function StudioPage() {
     )
   }
 
-  return <StudioLayout context={context} sessionId={sessionId} />
+  return (
+    <CmsEmbedBridgeProvider sessionId={sessionId} tenantId={tenantId}>
+      <StudioLayout context={context} sessionId={sessionId} />
+    </CmsEmbedBridgeProvider>
+  )
 }

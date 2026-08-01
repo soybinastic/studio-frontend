@@ -12,6 +12,7 @@ import {
   refreshPlatformConnection,
 } from '@/api/integrations'
 import { ApiError } from '@/api/client'
+import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useTenant } from '@/context/TenantProvider'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
@@ -82,6 +83,7 @@ export interface UseDestinationsOptions {
 
 export function useDestinations(options?: UseDestinationsOptions) {
   const { tenantId, configuration, refreshConfiguration } = useTenant()
+  const { isEmbedded, requestPlatformConnect } = useCmsEmbedBridge()
   const persistenceEnabled = isPersistenceEnabled()
 
   const syncedDestinations = useMemo(
@@ -107,6 +109,34 @@ export function useDestinations(options?: UseDestinationsOptions) {
   }, [persistenceEnabled, refreshConfiguration])
 
   const connectTwitch = useCallback(async () => {
+    if (isEmbedded) {
+      setIsConnecting(true)
+      try {
+        const payload = await requestPlatformConnect('twitch', tenantId)
+        const embeddedDestination: ConnectedDestination = {
+          id: `cms-twitch-${payload.platform_login}`,
+          platform: Platform.TWITCH,
+          name: payload.name || payload.platform_login,
+          status: Status.CONNECTED,
+          rtmpUrl: payload.stream_key
+            ? `${payload.rtmp_url.replace(/\/$/, '')}/${payload.stream_key}`
+            : payload.rtmp_url,
+          createdAt: new Date().toISOString(),
+        }
+        setDestinations((prev) => [
+          ...prev.filter((d) => d.platform !== Platform.TWITCH),
+          embeddedDestination,
+        ])
+        options?.onTwitchConnected?.()
+        toast.success('Twitch connected via CMS')
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Twitch connection failed')
+      } finally {
+        setIsConnecting(false)
+      }
+      return
+    }
+
     if (!persistenceEnabled || !tenantId) {
       toast.error('Persistence is not enabled')
       return
@@ -163,7 +193,14 @@ export function useDestinations(options?: UseDestinationsOptions) {
     } finally {
       setIsConnecting(false)
     }
-  }, [persistenceEnabled, tenantId, reload, options?.onTwitchConnected])
+  }, [
+    isEmbedded,
+    requestPlatformConnect,
+    persistenceEnabled,
+    tenantId,
+    reload,
+    options?.onTwitchConnected,
+  ])
 
   const connectYouTube = useCallback(async () => {
     toast.info('YouTube integration coming soon')
