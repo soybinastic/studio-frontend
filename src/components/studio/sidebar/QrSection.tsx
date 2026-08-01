@@ -3,8 +3,11 @@ import { QrPicker } from '@/components/studio/sidebar/QrPicker'
 import { QrPositionPicker } from '@/components/studio/sidebar/QrPositionPicker'
 import type { GraphicsState, QrPlacement } from '@/types/graphics'
 import { DEFAULT_QR_PLACEMENT, getQrPlacement } from '@/lib/qrGeometry'
+import { resolveGraphicUrl } from '@/lib/graphics'
+import type { QrPreset } from '@/lib/qrPresets'
 
 interface QrSectionProps {
+  presets?: QrPreset[]
   qr: GraphicsState['qr']
   disabled?: boolean
   onSelect: (url: string) => void
@@ -13,13 +16,14 @@ interface QrSectionProps {
 }
 
 export function QrSection({
+  presets,
   qr,
   disabled,
   onSelect,
   onPlacementChange,
   onClear,
 }: QrSectionProps) {
-  const isActive = Boolean(qr?.is_shown && qr.url)
+  const isActive = Boolean(qr?.is_shown && resolveGraphicUrl(qr))
   const placement = isActive ? getQrPlacement(qr) : DEFAULT_QR_PLACEMENT
 
   return (
@@ -30,7 +34,8 @@ export function QrSection({
       </p>
 
       <QrPicker
-        selectedUrl={isActive ? qr?.url : undefined}
+        presets={presets}
+        selectedUrl={isActive ? resolveGraphicUrl(qr) : undefined}
         disabled={disabled}
         onSelect={onSelect}
         onClear={onClear}

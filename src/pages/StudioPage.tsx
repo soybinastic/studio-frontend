@@ -5,12 +5,14 @@ import { toast } from 'sonner'
 import { getSession } from '@/api/sessions'
 import { ApiError } from '@/api/client'
 import { StudioLayout } from '@/components/studio/StudioLayout'
+import { useTenant } from '@/context/TenantProvider'
 import { loadStudioContext } from '@/lib/studioContext'
 import type { StudioSessionContext } from '@/types/session'
 
 export function StudioPage() {
   const { sessionId = '' } = useParams()
   const navigate = useNavigate()
+  const { isReady: tenantReady } = useTenant()
   const [context, setContext] = useState<StudioSessionContext | null>(null)
   const [bootstrapping, setBootstrapping] = useState(true)
 
@@ -54,7 +56,7 @@ export function StudioPage() {
     }
   }, [sessionId, navigate])
 
-  if (bootstrapping || !context) {
+  if (bootstrapping || !tenantReady || !context) {
     return (
       <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

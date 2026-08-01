@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Sparkles, Video } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,15 +15,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useTenant } from '@/context/TenantProvider'
 import { saveStudioContext } from '@/lib/studioContext'
 import { generatePeerId } from '@/lib/utils'
 import type { LayoutType } from '@/types/session'
 
 export function HomePage() {
   const navigate = useNavigate()
+  const { isReady, configuration } = useTenant()
   const [displayName, setDisplayName] = useState('')
-  const [layout, setLayout] = useState<LayoutType>('CONTAIN')
+  const [layout, setLayout] = useState<LayoutType>(configuration?.layout ?? 'CONTAIN')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (configuration?.layout) {
+      setLayout(configuration.layout)
+    }
+  }, [configuration?.layout])
+
+  if (!isReady) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

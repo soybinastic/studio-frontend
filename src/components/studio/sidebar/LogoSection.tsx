@@ -2,9 +2,11 @@ import { Label } from '@/components/ui/label'
 import { LogoPicker } from '@/components/studio/sidebar/LogoPicker'
 import { LogoPlacementPicker } from '@/components/studio/sidebar/LogoPlacementPicker'
 import type { GraphicsState, LogoPlacement } from '@/types/graphics'
-import { DEFAULT_LOGO_PLACEMENT, getLogoPlacement } from '@/lib/logoPresets'
+import { DEFAULT_LOGO_PLACEMENT, getLogoPlacement, type LogoPreset } from '@/lib/logoPresets'
+import { resolveGraphicUrl } from '@/lib/graphics'
 
 interface LogoSectionProps {
+  presets?: LogoPreset[]
   logo: GraphicsState['logo']
   disabled?: boolean
   onSelect: (url: string) => void
@@ -13,13 +15,14 @@ interface LogoSectionProps {
 }
 
 export function LogoSection({
+  presets,
   logo,
   disabled,
   onSelect,
   onPlacementChange,
   onClear,
 }: LogoSectionProps) {
-  const isActive = Boolean(logo?.is_active && logo.url)
+  const isActive = Boolean(logo?.is_active && resolveGraphicUrl(logo))
   const placement = isActive ? getLogoPlacement(logo) : DEFAULT_LOGO_PLACEMENT
 
   return (
@@ -30,7 +33,8 @@ export function LogoSection({
       </p>
 
       <LogoPicker
-        selectedUrl={isActive ? logo?.url : undefined}
+        presets={presets}
+        selectedUrl={isActive ? resolveGraphicUrl(logo) : undefined}
         disabled={disabled}
         onSelect={onSelect}
         onClear={onClear}

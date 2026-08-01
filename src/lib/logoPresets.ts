@@ -4,6 +4,7 @@ export interface LogoPreset {
   id: string
   label: string
   url: string
+  thumbnail?: string
 }
 
 export const LOGO_PRESETS: LogoPreset[] = [

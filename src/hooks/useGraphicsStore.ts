@@ -4,26 +4,33 @@ import { getGraphics } from '@/api/graphics'
 import { ApiError } from '@/api/client'
 import type { GraphicLayerKey, GraphicsState } from '@/types/graphics'
 import { emptyGraphicsState, mergeGraphicsState } from '@/lib/graphics'
+import { persistGraphics } from '@/lib/persistenceSync'
 import { useBackendSync } from '@/hooks/useBackendSync'
 
 const GRAPHICS_POLL_MS = 2000
 const POLL_SKIP_MS = 4000
 
-export function useGraphicsStore(sessionId: string, isHost: boolean) {
+export function useGraphicsStore(
+  sessionId: string,
+  isHost: boolean,
+  activeSceneId: string | null = null,
+) {
   const [graphics, setGraphics] = useState<GraphicsState | null>(null)
   const sync = useBackendSync(sessionId, true)
   const graphicsRef = useRef<GraphicsState | null>(null)
   const skipPollUntilRef = useRef(0)
   graphicsRef.current = graphics
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options?: { force?: boolean }) => {
     if (!sessionId) return
-    if (Date.now() < skipPollUntilRef.current) return
+    if (!options?.force && Date.now() < skipPollUntilRef.current) return
     try {
       const state = await getGraphics(sessionId)
       setGraphics(state)
+      return state
     } catch (err) {
       if (err instanceof ApiError && isHost) toast.error(err.message)
+      return null
     }
   }, [sessionId, isHost])
 
@@ -46,9 +53,29 @@ export function useGraphicsStore(sessionId: string, isHost: boolean) {
       const result = await sync.syncGraphics({ [layer]: value })
       if (result) {
         setGraphics(result)
+        void persistGraphics({ [layer]: value }, sessionId, activeSceneId)
       }
     },
-    [isHost, sync],
+    [isHost, sync, sessionId, activeSceneId],
+  )
+
+  const updateLayers = useCallback(
+    async (partial: Partial<GraphicsState>) => {
+      if (!isHost || Object.keys(partial).length === 0) return
+
+      const current = graphicsRef.current ?? emptyGraphicsState()
+      const next = mergeGraphicsState(current, partial)
+
+      skipPollUntilRef.current = Date.now() + POLL_SKIP_MS
+      setGraphics(next)
+
+      const result = await sync.syncGraphics(partial)
+      if (result) {
+        setGraphics(result)
+        void persistGraphics(partial, sessionId, activeSceneId)
+      }
+    },
+    [isHost, sync, sessionId, activeSceneId],
   )
 
   const applyGraphics = useCallback((state: Partial<GraphicsState> | null) => {
@@ -59,6 +86,7 @@ export function useGraphicsStore(sessionId: string, isHost: boolean) {
   return {
     graphics,
     updateLayer,
+    updateLayers,
     applyGraphics,
     isSyncing: sync.isSyncing,
     refresh,

@@ -1,16 +1,25 @@
 import { Label } from '@/components/ui/label'
 import { OverlayPicker } from '@/components/studio/sidebar/OverlayPicker'
 import type { GraphicsState } from '@/types/graphics'
+import { resolveGraphicUrl } from '@/lib/graphics'
+import type { OverlayPreset } from '@/lib/overlayPresets'
 
 interface OverlaySectionProps {
+  presets?: OverlayPreset[]
   overlay: GraphicsState['overlay']
   disabled?: boolean
   onSelect: (url: string) => void
   onClear: () => void
 }
 
-export function OverlaySection({ overlay, disabled, onSelect, onClear }: OverlaySectionProps) {
-  const isActive = Boolean(overlay?.is_active && overlay.url)
+export function OverlaySection({
+  presets,
+  overlay,
+  disabled,
+  onSelect,
+  onClear,
+}: OverlaySectionProps) {
+  const isActive = Boolean(overlay?.is_active && resolveGraphicUrl(overlay))
 
   return (
     <div className="space-y-2 rounded-lg border border-border/60 p-3">
@@ -20,7 +29,8 @@ export function OverlaySection({ overlay, disabled, onSelect, onClear }: Overlay
       </p>
 
       <OverlayPicker
-        selectedUrl={isActive ? overlay?.url : undefined}
+        presets={presets}
+        selectedUrl={isActive ? resolveGraphicUrl(overlay) : undefined}
         disabled={disabled}
         onSelect={onSelect}
         onClear={onClear}

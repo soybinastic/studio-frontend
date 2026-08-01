@@ -4,13 +4,9 @@ import { updateScene } from '@/api/scenes'
 import { listRtmpSources, type RtmpSource } from '@/api/rtmpSources'
 import { getSession, updateSessionTileConfig } from '@/api/sessions'
 import { ApiError } from '@/api/client'
-import {
-  assignmentsFromOrder,
-  reorderSourceIds,
-  resolveEffectiveAssignments,
-  resolveSourceOrder,
-} from '@/lib/tileOrder'
+import { assignmentsFromOrder, reorderSourceIds, resolveEffectiveAssignments, resolveSourceOrder } from '@/lib/tileOrder'
 import { isCompositorPeer } from '@/lib/participants'
+import { persistSceneSources, persistTileOrder } from '@/lib/persistenceSync'
 import type { SceneSourcesConfig } from '@/types/scenes'
 import type { StudioTileSource } from '@/types/participants'
 import type { ConnectionState, ParticipantMedia } from '@/types/session'
@@ -247,11 +243,13 @@ export function useTileOrderStore({
             sources: { assignments },
           })
           onSceneSourcesUpdated?.(updated.sources.assignments ?? assignments)
+          void persistSceneSources(sessionId, activeSceneId, updated.sources.assignments ?? assignments)
         } else {
           const session = await updateSessionTileConfig(sessionId, {
             tile_order_config: { assignments },
           })
           setTileOrderConfig(session.tile_order_config)
+          void persistTileOrder(session.tile_order_config ?? { version: 1, assignments })
         }
         return true
       } catch (err) {

@@ -3,6 +3,7 @@ export interface BackgroundPreset {
   label: string
   url: string
   type: 'image' | 'video'
+  thumbnail?: string
 }
 
 export const BACKGROUND_PRESETS: BackgroundPreset[] = [

@@ -35,6 +35,7 @@ interface StudioSidebarProps {
   >
   inviteUrl?: string
   onGraphicUpdate: (layer: GraphicLayerKey, value: GraphicsState[GraphicLayerKey]) => void
+  onGraphicUpdateLayers?: (partial: Partial<GraphicsState>) => void
   onReorderSources: (fromIndex: number, toIndex: number) => void
   onResetTileOrder: () => void
   onPin: (sourceId: string) => void
@@ -60,6 +61,7 @@ export function StudioSidebar({
   backgroundMusicStore,
   inviteUrl,
   onGraphicUpdate,
+  onGraphicUpdateLayers,
   onReorderSources,
   onResetTileOrder,
   onPin,
@@ -107,7 +109,9 @@ export function StudioSidebar({
                   graphics={graphics}
                   isHost={isHost}
                   onUpdate={onGraphicUpdate}
+                  onUpdateLayers={onGraphicUpdateLayers}
                   disabled={isSyncing}
+                  isSaving={isSyncing}
                 />
               )}
 

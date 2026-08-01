@@ -1,19 +1,26 @@
 import { Check } from 'lucide-react'
-import { LOGO_PRESETS } from '@/lib/logoPresets'
+import { LOGO_PRESETS, type LogoPreset } from '@/lib/logoPresets'
 import { cn } from '@/lib/utils'
 
 interface LogoPickerProps {
+  presets?: LogoPreset[]
   selectedUrl?: string
   disabled?: boolean
   onSelect: (url: string) => void
   onClear?: () => void
 }
 
-export function LogoPicker({ selectedUrl, disabled, onSelect, onClear }: LogoPickerProps) {
+export function LogoPicker({
+  presets = LOGO_PRESETS,
+  selectedUrl,
+  disabled,
+  onSelect,
+  onClear,
+}: LogoPickerProps) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">
-        {LOGO_PRESETS.map((preset) => {
+        {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url
           return (
             <button
@@ -32,7 +39,7 @@ export function LogoPicker({ selectedUrl, disabled, onSelect, onClear }: LogoPic
               aria-pressed={isSelected}
             >
               <img
-                src={preset.url}
+                src={preset.thumbnail ?? preset.url}
                 alt={preset.label}
                 className="h-full w-full object-contain p-1.5"
                 loading="lazy"

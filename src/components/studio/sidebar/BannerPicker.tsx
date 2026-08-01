@@ -8,6 +8,7 @@ import {
   resolveBannerBrandColors,
 } from '@/lib/bannerThemes'
 import type { BannerGraphic } from '@/types/graphics'
+import { bannerShouldShow } from '@/lib/graphics'
 import { cn } from '@/lib/utils'
 
 interface BannerPickerProps {
@@ -39,7 +40,7 @@ function BannerPresetPreview({ banner }: { banner: BannerGraphic }) {
 }
 
 export function BannerPicker({ banner, disabled, onSelect, onClear }: BannerPickerProps) {
-  const activePreset = BANNER_PRESETS.find((preset) => isSameBannerPreset(banner, preset))
+  const isActive = bannerShouldShow(banner)
 
   return (
     <div className="space-y-2">
@@ -72,7 +73,7 @@ export function BannerPicker({ banner, disabled, onSelect, onClear }: BannerPick
         })}
       </div>
 
-      {activePreset && onClear && (
+      {isActive && onClear && (
         <button
           type="button"
           disabled={disabled}

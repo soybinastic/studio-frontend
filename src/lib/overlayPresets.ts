@@ -2,6 +2,7 @@ export interface OverlayPreset {
   id: string
   label: string
   url: string
+  thumbnail?: string
 }
 
 export const OVERLAY_PRESETS: OverlayPreset[] = [
