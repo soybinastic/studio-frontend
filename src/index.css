@@ -259,4 +259,49 @@
   .studio-mobile-nav {
     @apply flex shrink-0 items-center justify-center gap-2 border-t border-border/50 bg-surface/95 px-3 py-2 backdrop-blur-sm md:hidden;
   }
+
+  @keyframes destination-slide-forward {
+    from {
+      opacity: 0;
+      transform: translateX(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes destination-slide-back {
+    from {
+      opacity: 0;
+      transform: translateX(-1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes destination-fade-in {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .destination-animate-forward {
+    animation: destination-slide-forward 0.25s ease-out;
+  }
+
+  .destination-animate-back {
+    animation: destination-slide-back 0.25s ease-out;
+  }
+
+  .destination-animate-fade {
+    animation: destination-fade-in 0.2s ease-out;
+  }
 }
