@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Layers, LayoutGrid, LayoutList, Loader2, Plus } from 'lucide-react'
 import { SceneListItem } from '@/components/studio/scenes/SceneListItem'
 import { SceneCardItem } from '@/components/studio/scenes/SceneCardItem'
@@ -6,6 +6,7 @@ import { StudioPanelShell } from '@/components/studio/layout/StudioPanelShell'
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
 import { useSceneViewPreference } from '@/hooks/useSceneViewPreference'
+import { useIsDrawerMode, usePanelDefaultExpanded } from '@/hooks/useBreakpoint'
 import type { Scene } from '@/types/scenes'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +19,8 @@ interface ScenesSidebarProps {
   onActivate: (sceneId: string) => void
   onRename: (sceneId: string, name: string) => void
   onDelete: (sceneId: string) => void
+  drawerOpen?: boolean
+  onDrawerOpenChange?: (open: boolean) => void
 }
 
 export function ScenesSidebar({
@@ -29,17 +32,30 @@ export function ScenesSidebar({
   onActivate,
   onRename,
   onDelete,
+  drawerOpen = false,
+  onDrawerOpenChange,
 }: ScenesSidebarProps) {
-  const [expanded, setExpanded] = useState(true)
+  const drawerMode = useIsDrawerMode()
+  const defaultExpanded = usePanelDefaultExpanded()
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const { viewMode, setViewMode } = useSceneViewPreference(isHost)
   const isCardView = viewMode === 'card'
+  const showExpandedContent = drawerMode || expanded
+
+  useEffect(() => {
+    setExpanded(defaultExpanded)
+  }, [defaultExpanded])
 
   return (
     <StudioPanelShell
       side="left"
       expanded={expanded}
       onExpandedChange={setExpanded}
-      expandedWidth="w-60"
+      expandedWidth="w-60 lg:w-64"
+      drawerMode={drawerMode}
+      drawerOpen={drawerOpen}
+      onDrawerOpenChange={onDrawerOpenChange}
+      drawerTitle="Scenes"
       header={
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -95,7 +111,7 @@ export function ScenesSidebar({
         ) : undefined
       }
     >
-      {expanded ? (
+      {showExpandedContent ? (
         <div
           className={cn(
             'studio-panel-scroll flex-1 overflow-y-auto p-2.5',

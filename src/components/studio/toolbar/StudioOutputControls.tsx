@@ -22,6 +22,7 @@ export interface StudioOutputControlsProps {
   onStopRecording: () => void
   onStartStream: (type: 'RTMP' | 'HLS', destinations?: StreamDestinationInput[]) => void
   onStopStream: () => void
+  compact?: boolean
 }
 
 function OutputButton({
@@ -33,6 +34,7 @@ function OutputButton({
   onStart,
   onStop,
   variant = 'secondary',
+  compact = false,
 }: {
   state: OutputState
   activeLabel: string
@@ -42,6 +44,7 @@ function OutputButton({
   onStart: () => void
   onStop: () => void
   variant?: 'secondary' | 'live'
+  compact?: boolean
 }) {
   const isLoading = state === 'starting' || state === 'stopping'
   const isActive = state === 'active'
@@ -50,21 +53,25 @@ function OutputButton({
 
   if (isActive || isStopping) {
     return (
-      <Button variant="destructive" size="sm" disabled={isLoading} onClick={onStop}>
-        {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ActiveIcon className="mr-1.5 h-3.5 w-3.5 fill-current" />}
-        {isStopping ? 'Stopping…' : activeLabel}
+      <Button variant="destructive" size="sm" disabled={isLoading} onClick={onStop} className="shrink-0">
+        {isLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ActiveIcon className={cn('h-3.5 w-3.5 fill-current', !compact && 'mr-1.5')} />}
+        <span className={cn(compact && 'sr-only sm:not-sr-only')}>
+          {isStopping ? (compact ? 'Stop' : 'Stopping…') : compact ? 'Stop' : activeLabel}
+        </span>
       </Button>
     )
   }
 
   return (
-    <Button variant={variant} size="sm" disabled={isLoading || isDisabled} onClick={onStart}>
+    <Button variant={variant} size="sm" disabled={isLoading || isDisabled} onClick={onStart} className="shrink-0">
       {isLoading ? (
         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
       ) : (
-        <IdleIcon className={cn('mr-1.5 h-3.5 w-3.5', variant === 'live' && 'fill-live text-live')} />
+        <IdleIcon className={cn('h-3.5 w-3.5', variant === 'live' && 'fill-live text-live', !compact && 'mr-1.5')} />
       )}
-      {state === 'starting' ? 'Starting…' : idleLabel}
+      <span className={cn(compact && 'sr-only sm:not-sr-only')}>
+        {state === 'starting' ? (compact ? '…' : 'Starting…') : compact ? (idleLabel.includes('record') ? 'Rec' : 'Stream') : idleLabel}
+      </span>
     </Button>
   )
 }
@@ -72,9 +79,11 @@ function OutputButton({
 function StartStreamButton({
   streamingState,
   onClick,
+  compact = false,
 }: {
   streamingState: OutputState
   onClick?: () => void
+  compact?: boolean
 }) {
   return (
     <Button
@@ -82,13 +91,16 @@ function StartStreamButton({
       size="sm"
       disabled={streamingState === 'starting' || streamingState === 'disabled'}
       onClick={onClick}
+      className="shrink-0"
     >
       {streamingState === 'starting' ? (
-        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : (
-        <Radio className="mr-1.5 h-3.5 w-3.5" />
+        <Radio className={cn('h-3.5 w-3.5', !compact && 'mr-1.5')} />
       )}
-      {streamingState === 'starting' ? 'Starting…' : 'Start stream'}
+      <span className={cn(compact && 'sr-only sm:not-sr-only')}>
+        {streamingState === 'starting' ? (compact ? '…' : 'Starting…') : compact ? 'Stream' : 'Start stream'}
+      </span>
     </Button>
   )
 }
@@ -101,6 +113,7 @@ export function StudioOutputControls({
   onStopRecording,
   onStartStream,
   onStopStream,
+  compact = false,
 }: StudioOutputControlsProps) {
   const [streamOpen, setStreamOpen] = useState(false)
 
@@ -118,6 +131,7 @@ export function StudioOutputControls({
         activeIcon={Square}
         onStart={onStartRecording}
         onStop={onStopRecording}
+        compact={compact}
       />
 
       {streamingState === 'active' || streamingState === 'stopping' ? (
@@ -130,6 +144,7 @@ export function StudioOutputControls({
           onStart={() => {}}
           onStop={onStopStream}
           variant="live"
+          compact={compact}
         />
       ) : streamDestinationModalEnabled ? (
         <StreamDestinationDialog
@@ -137,10 +152,10 @@ export function StudioOutputControls({
           onOpenChange={setStreamOpen}
           onStartStream={onStartStream}
           savedDestinations={savedDestinations}
-          trigger={<StartStreamButton streamingState={streamingState} />}
+          trigger={<StartStreamButton streamingState={streamingState} compact={compact} />}
         />
       ) : (
-        <StartStreamButton streamingState={streamingState} onClick={handleDirectStartStream} />
+        <StartStreamButton streamingState={streamingState} onClick={handleDirectStartStream} compact={compact} />
       )}
     </>
   )

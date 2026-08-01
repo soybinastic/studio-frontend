@@ -43,7 +43,7 @@ export function PreviewCanvas({
   const participantInset = showBackground
 
   return (
-    <div className="relative mx-auto w-full max-w-4xl">
+    <div className="relative mx-auto w-full max-w-4xl px-0 sm:px-2">
       <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-zinc-950 shadow-2xl ring-1 ring-border/40">
         <PreviewGraphicsLayer layout={layout} graphics={graphics} variant="background" />
 

@@ -12,7 +12,9 @@ import {
 } from '@/components/ui/dialog'
 import { ConnectionBanner } from '@/components/studio/ConnectionBanner'
 import { StudioOutputControls, type StudioOutputControlsProps } from '@/components/studio/toolbar/StudioOutputControls'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import type { ConnectionState } from '@/types/session'
+import { cn } from '@/lib/utils'
 
 export interface StudioHeaderControlsProps {
   connectionState: ConnectionState
@@ -28,12 +30,14 @@ export function StudioHeaderControls({
   onEndSession,
 }: StudioHeaderControlsProps) {
   const [endOpen, setEndOpen] = useState(false)
+  const breakpoint = useBreakpoint()
+  const compact = breakpoint === 'mobile' || breakpoint === 'tablet'
 
   return (
-    <>
-      <ConnectionBanner state={connectionState} error={connectionError} />
+    <div className={cn('flex shrink-0 items-center gap-1 sm:gap-2', compact && 'flex-nowrap')}>
+      <ConnectionBanner state={connectionState} error={connectionError} compact={compact} />
 
-      {output && <StudioOutputControls {...output} />}
+      {output && <StudioOutputControls {...output} compact={compact} />}
 
       {onEndSession && (
         <Dialog open={endOpen} onOpenChange={setEndOpen}>
@@ -41,7 +45,7 @@ export function StudioHeaderControls({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              className="touch-target h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive sm:h-8 sm:w-8"
               aria-label="End session"
             >
               <Trash2 className="h-4 w-4" />
@@ -71,6 +75,6 @@ export function StudioHeaderControls({
           </DialogContent>
         </Dialog>
       )}
-    </>
+    </div>
   )
 }

@@ -32,7 +32,7 @@ function LayoutOption({
       aria-label={`${item.label}: ${item.description}`}
       aria-pressed={isActive}
       className={cn(
-        'group flex w-19 shrink-0 flex-col gap-1.5 rounded-lg p-1.5 text-left transition-all',
+        'group flex w-[4.5rem] shrink-0 flex-col gap-1.5 rounded-lg p-1.5 text-left transition-all sm:w-19',
         isActive
           ? 'bg-primary/10 ring-2 ring-primary/40'
           : 'bg-background/60 hover:bg-muted/70 ring-1 ring-border/50 hover:ring-border',
@@ -92,8 +92,8 @@ export function LayoutPicker({ layout, onLayoutChange, disabled }: LayoutPickerP
         className={cn(
           'flex w-full max-w-4xl gap-2',
           showAll
-            ? 'studio-panel-scroll flex-nowrap overflow-x-auto pb-1'
-            : 'flex-nowrap justify-center',
+            ? 'studio-panel-scroll -mx-1 flex-nowrap overflow-x-auto px-1 pb-1'
+            : 'flex-wrap justify-center sm:flex-nowrap',
         )}
       >
         {visibleLayouts.map((item) => (

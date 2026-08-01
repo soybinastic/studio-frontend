@@ -189,8 +189,8 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="glass-panel mx-4 w-full max-w-lg rounded-2xl p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="glass-panel max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl p-4 shadow-2xl sm:max-w-lg sm:rounded-2xl sm:p-6">
         <div className="mb-5">
           <h2 className="text-lg font-semibold">Choose devices for this scene</h2>
           <p className="text-sm text-muted-foreground">
@@ -285,11 +285,11 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
           </div>
         </div>
 
-        <div className="mt-6 flex justify-between">
-          <Button type="button" variant="ghost" onClick={handleCancel}>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          <Button type="button" variant="ghost" onClick={handleCancel} className="w-full sm:w-auto">
             Cancel
           </Button>
-          <Button type="button" onClick={handleConfirm} disabled={!selection.cameraId}>
+          <Button type="button" onClick={handleConfirm} disabled={!selection.cameraId} className="w-full sm:w-auto">
             Save devices
           </Button>
         </div>

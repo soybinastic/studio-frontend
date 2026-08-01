@@ -31,9 +31,9 @@ export function InvitePanel({ inviteUrl, className }: InvitePanelProps) {
         <Link2 className="h-3.5 w-3.5" />
         Guest invite link
       </Label>
-      <div className="flex gap-2">
-        <Input id="invite-url" readOnly value={inviteUrl} className="font-mono text-xs" />
-        <Button type="button" variant="outline" size="icon" onClick={handleCopy} aria-label="Copy invite link">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Input id="invite-url" readOnly value={inviteUrl} className="min-w-0 flex-1 font-mono text-xs" />
+        <Button type="button" variant="outline" size="icon" className="touch-target shrink-0" onClick={handleCopy} aria-label="Copy invite link">
           {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
         </Button>
       </div>

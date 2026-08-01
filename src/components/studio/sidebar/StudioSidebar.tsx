@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Image, Music2, Plus, Users } from 'lucide-react'
 import { BackgroundMusicPanel } from '@/components/studio/audio/BackgroundMusicPanel'
 import { GraphicsPanel } from '@/components/studio/sidebar/GraphicsPanel'
@@ -6,6 +6,7 @@ import { SourceTileList } from '@/components/studio/sidebar/SourceTileList'
 import { SourceCard, SOURCE_TYPES } from '@/components/studio/sidebar/SourceCard'
 import { InvitePanel } from '@/components/studio/InvitePanel'
 import { StudioPanelShell } from '@/components/studio/layout/StudioPanelShell'
+import { useIsDrawerMode, usePanelDefaultExpanded } from '@/hooks/useBreakpoint'
 import type { BackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import type { LayoutType } from '@/types/session'
 import type { SidebarTab } from '@/types/studio'
@@ -44,6 +45,8 @@ interface StudioSidebarProps {
   onMute?: (sourceId: string) => void
   onAddSource?: (sourceId: string) => void
   isSyncing?: boolean
+  drawerOpen?: boolean
+  onDrawerOpenChange?: (open: boolean) => void
 }
 
 const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
@@ -71,7 +74,7 @@ function SidebarTabs({
           onClick={() => onTabChange(tab.id)}
           className={cn(
             'flex items-center justify-center gap-1 rounded-md font-medium transition-all',
-            compact ? 'h-8 w-8' : 'flex-1 flex-col gap-0.5 px-1 py-1.5 text-[10px]',
+            compact ? 'h-9 w-9' : 'flex-1 flex-col gap-0.5 px-1 py-1.5 text-[10px] sm:text-xs',
             activeTab === tab.id
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
@@ -104,19 +107,32 @@ export function StudioSidebar({
   onMute,
   onAddSource,
   isSyncing,
+  drawerOpen = false,
+  onDrawerOpenChange,
 }: StudioSidebarProps) {
-  const [expanded, setExpanded] = useState(true)
+  const drawerMode = useIsDrawerMode()
+  const defaultExpanded = usePanelDefaultExpanded()
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [activeTab, setActiveTab] = useState<SidebarTab>('participants')
+  const showExpandedContent = drawerMode || expanded
+
+  useEffect(() => {
+    setExpanded(defaultExpanded)
+  }, [defaultExpanded])
 
   return (
     <StudioPanelShell
       side="right"
       expanded={expanded}
       onExpandedChange={setExpanded}
-      expandedWidth="w-80"
+      expandedWidth="w-72 lg:w-80 xl:w-96"
+      drawerMode={drawerMode}
+      drawerOpen={drawerOpen}
+      onDrawerOpenChange={onDrawerOpenChange}
+      drawerTitle="Studio controls"
       header={<SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />}
     >
-      {expanded ? (
+      {showExpandedContent ? (
         <div className="studio-panel-scroll flex-1 overflow-y-auto p-3">
           {activeTab === 'graphics' && (
             <GraphicsPanel
@@ -151,7 +167,7 @@ export function StudioSidebar({
           )}
 
           {activeTab === 'sources' && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {SOURCE_TYPES.map((source) => (
                 <SourceCard key={source.id} source={source} onAdd={onAddSource} />
               ))}

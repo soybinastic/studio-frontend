@@ -7,6 +7,7 @@ import { PreviewCanvas } from '@/components/studio/preview/PreviewCanvas'
 import { LayoutPicker } from '@/components/studio/layout/LayoutPicker'
 import { StudioSidebar } from '@/components/studio/sidebar/StudioSidebar'
 import { ScenesSidebar } from '@/components/studio/scenes/ScenesSidebar'
+import { StudioMobileNav } from '@/components/studio/layout/StudioMobileNav'
 import { AddSceneModal } from '@/components/studio/scenes/AddSceneModal'
 import { CountdownConfigModal } from '@/components/studio/scenes/CountdownConfigModal'
 import { SceneDevicePickerModal } from '@/components/studio/scenes/SceneDevicePickerModal'
@@ -21,6 +22,7 @@ import { useTileOrderStore } from '@/hooks/useTileOrderStore'
 import { useGraphicsStore } from '@/hooks/useGraphicsStore'
 import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
+import { useIsDrawerMode } from '@/hooks/useBreakpoint'
 import { useTenant } from '@/context/TenantProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
@@ -54,6 +56,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const [showAddSceneModal, setShowAddSceneModal] = useState(false)
   const [showCountdownModal, setShowCountdownModal] = useState(false)
   const [roomEnabled, setRoomEnabled] = useState(false)
+  const [scenesDrawerOpen, setScenesDrawerOpen] = useState(false)
+  const [controlsDrawerOpen, setControlsDrawerOpen] = useState(false)
+  const isDrawerMode = useIsDrawerMode()
 
   const outputStore = useOutputStore({
     sessionId,
@@ -494,7 +499,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         isSaving={sceneStore.isMutating}
       />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
         <ScenesSidebar
           scenes={sceneStore.scenes}
           isHost={context.isHost}
@@ -504,10 +509,12 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onActivate={(id) => void handleActivateScene(id)}
           onRename={handleRenameScene}
           onDelete={(id) => void handleDeleteScene(id)}
+          drawerOpen={scenesDrawerOpen}
+          onDrawerOpenChange={setScenesDrawerOpen}
         />
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-          <div className="flex flex-col items-center px-4 pb-4 pt-3">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="studio-panel-scroll flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-3 pb-3 pt-2 sm:px-4 sm:pb-4 sm:pt-3">
             <PreviewCanvas
               layout={outputStore.layout}
               participants={previewParticipants}
@@ -517,7 +524,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
             />
 
             {context.isHost && (
-              <div className="mt-3 flex w-full max-w-4xl justify-center">
+              <div className="mt-2 flex w-full max-w-4xl justify-center sm:mt-3">
                 <LayoutPicker
                   layout={outputStore.layout}
                   onLayoutChange={(l) => void handleLayoutChange(l)}
@@ -534,9 +541,24 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
               onLeave={handleLeave}
               onDeviceSettings={() => setShowDeviceSetup(true)}
               leaveLabel={context.isHost ? 'Leave studio' : 'Leave'}
-              className="mt-3"
+              className="mt-2 sm:mt-3"
             />
           </div>
+
+          {isDrawerMode && (
+            <StudioMobileNav
+              scenesOpen={scenesDrawerOpen}
+              controlsOpen={controlsDrawerOpen}
+              onScenesOpen={() => {
+                setControlsDrawerOpen(false)
+                setScenesDrawerOpen(true)
+              }}
+              onControlsOpen={() => {
+                setScenesDrawerOpen(false)
+                setControlsDrawerOpen(true)
+              }}
+            />
+          )}
         </main>
 
         <StudioSidebar
@@ -555,6 +577,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onHide={(sourceId) => void tileOrder.toggleHide(sourceId)}
           onMute={() => void toggleMic()}
           isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing || backgroundMusicStore.isMutating}
+          drawerOpen={controlsDrawerOpen}
+          onDrawerOpenChange={setControlsDrawerOpen}
         />
       </div>
     </div>
