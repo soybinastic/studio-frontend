@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { TopToolbar } from '@/components/studio/toolbar/TopToolbar'
 import { MediaBar } from '@/components/studio/toolbar/MediaBar'
 import { PreviewCanvas } from '@/components/studio/preview/PreviewCanvas'
 import { LayoutPicker } from '@/components/studio/layout/LayoutPicker'
 import { StudioSidebar } from '@/components/studio/sidebar/StudioSidebar'
 import { ScenesSidebar } from '@/components/studio/scenes/ScenesSidebar'
+import { StudioMobileNav } from '@/components/studio/layout/StudioMobileNav'
 import { AddSceneModal } from '@/components/studio/scenes/AddSceneModal'
 import { CountdownConfigModal } from '@/components/studio/scenes/CountdownConfigModal'
 import { SceneDevicePickerModal } from '@/components/studio/scenes/SceneDevicePickerModal'
@@ -22,6 +22,7 @@ import { useTileOrderStore } from '@/hooks/useTileOrderStore'
 import { useGraphicsStore } from '@/hooks/useGraphicsStore'
 import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
+import { useIsDrawerMode } from '@/hooks/useBreakpoint'
 import { useTenant } from '@/context/TenantProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
@@ -55,13 +56,33 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const [showAddSceneModal, setShowAddSceneModal] = useState(false)
   const [showCountdownModal, setShowCountdownModal] = useState(false)
   const [roomEnabled, setRoomEnabled] = useState(false)
+  const [scenesDrawerOpen, setScenesDrawerOpen] = useState(false)
+  const [controlsDrawerOpen, setControlsDrawerOpen] = useState(false)
+  const isDrawerMode = useIsDrawerMode()
 
   const outputStore = useOutputStore({
     sessionId,
     isHost: context.isHost,
     initialLayout: context.layout,
   })
+  const {
+    recordingState,
+    streamingState,
+    setRecordingAction,
+    setStreamingAction,
+    refresh: refreshOutput,
+  } = outputStore
   const backendSync = useBackendSync(sessionId, context.isHost)
+  const {
+    syncStartRecording,
+    syncStopRecording,
+    syncStartStreaming,
+    syncStopStreaming,
+  } = backendSync
+  const savedDestinations = useMemo(
+    () => configuration?.destinations ?? [],
+    [configuration?.destinations],
+  )
   const sceneStore = useSceneStore(sessionId, context.isHost, outputStore.setCountdownState)
   const graphicsStore = useGraphicsStore(sessionId, context.isHost, sceneStore.activeSceneId)
   const backgroundMusicStore = useBackgroundMusicStore({
@@ -200,17 +221,6 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     }
   }, [roomEnabled, connectionState, publishProducers])
 
-  const title = useMemo(
-    () => (context.isHost ? 'Host studio' : `${context.hostDisplayName}'s studio`),
-    [context],
-  )
-
-  const subtitle = useMemo(
-    () =>
-      `${tileOrder.visibleTileSources.length} source${tileOrder.visibleTileSources.length === 1 ? '' : 's'} · ${outputStore.layout}`,
-    [tileOrder.visibleTileSources.length, outputStore.layout],
-  )
-
   const handleLayoutChange = useCallback(
     async (layout: LayoutType) => {
       outputStore.setLayout(layout)
@@ -346,41 +356,41 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   )
 
   const handleStartRecording = useCallback(async () => {
-    outputStore.setRecordingAction('starting')
-    await backendSync.syncStartRecording()
-    outputStore.setRecordingAction(null)
-    await outputStore.refresh()
+    setRecordingAction('starting')
+    await syncStartRecording()
+    setRecordingAction(null)
+    await refreshOutput()
     toast.success('Recording started')
-  }, [outputStore, backendSync])
+  }, [setRecordingAction, syncStartRecording, refreshOutput])
 
   const handleStopRecording = useCallback(async () => {
-    outputStore.setRecordingAction('stopping')
-    await backendSync.syncStopRecording()
-    outputStore.setRecordingAction(null)
-    await outputStore.refresh()
+    setRecordingAction('stopping')
+    await syncStopRecording()
+    setRecordingAction(null)
+    await refreshOutput()
     toast.success('Recording stopped')
-  }, [outputStore, backendSync])
+  }, [setRecordingAction, syncStopRecording, refreshOutput])
 
   const handleStartStream = useCallback(
-    async (type: 'RTMP' | 'HLS', destinations?: Parameters<typeof backendSync.syncStartStreaming>[1]) => {
-      outputStore.setStreamingAction('starting')
+    async (type: 'RTMP' | 'HLS', destinations?: Parameters<typeof syncStartStreaming>[1]) => {
+      setStreamingAction('starting')
       if (type === 'RTMP' && destinations?.length) {
         void persistDestinationsFromStream(destinations)
       }
-      await backendSync.syncStartStreaming(type, destinations)
-      outputStore.setStreamingAction(null)
-      await outputStore.refresh()
+      await syncStartStreaming(type, destinations)
+      setStreamingAction(null)
+      await refreshOutput()
     },
-    [outputStore, backendSync],
+    [setStreamingAction, syncStartStreaming, refreshOutput],
   )
 
   const handleStopStream = useCallback(async () => {
-    outputStore.setStreamingAction('stopping')
-    await backendSync.syncStopStreaming()
-    outputStore.setStreamingAction(null)
-    await outputStore.refresh()
+    setStreamingAction('stopping')
+    await syncStopStreaming()
+    setStreamingAction(null)
+    await refreshOutput()
     toast.success('Stream stopped')
-  }, [outputStore, backendSync])
+  }, [setStreamingAction, syncStopStreaming, refreshOutput])
 
   const handleEndSession = useCallback(async () => {
     await endSession(sessionId)
@@ -403,9 +413,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       connectionError: error,
       output: showOutputControls
         ? {
-            recordingState: outputStore.recordingState,
-            streamingState: outputStore.streamingState,
-            savedDestinations: configuration?.destinations ?? [],
+            recordingState,
+            streamingState,
+            savedDestinations,
             onStartRecording: () => void handleStartRecording(),
             onStopRecording: () => void handleStopRecording(),
             onStartStream: (type, destinations) => void handleStartStream(type, destinations),
@@ -422,9 +432,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     setControls,
     connectionState,
     error,
-    outputStore.recordingState,
-    outputStore.streamingState,
-    configuration?.destinations,
+    recordingState,
+    streamingState,
+    savedDestinations,
     handleStartRecording,
     handleStopRecording,
     handleStartStream,
@@ -461,7 +471,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   }
 
   return (
-    <div className="studio-grid-bg flex min-h-[calc(100dvh-3.5rem)] flex-col">
+    <div className="studio-grid-bg flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden">
       <DeviceSetupModal
         deviceStore={deviceStore}
         open={showDeviceSetup}
@@ -489,9 +499,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         isSaving={sceneStore.isMutating}
       />
 
-      <TopToolbar title={title} subtitle={subtitle} />
-
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
         <ScenesSidebar
           scenes={sceneStore.scenes}
           isHost={context.isHost}
@@ -501,10 +509,12 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onActivate={(id) => void handleActivateScene(id)}
           onRename={handleRenameScene}
           onDelete={(id) => void handleDeleteScene(id)}
+          drawerOpen={scenesDrawerOpen}
+          onDrawerOpenChange={setScenesDrawerOpen}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-1 flex-col items-center justify-center p-4">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="studio-panel-scroll flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-3 pb-3 pt-2 sm:px-4 sm:pb-4 sm:pt-3">
             <PreviewCanvas
               layout={outputStore.layout}
               participants={previewParticipants}
@@ -514,7 +524,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
             />
 
             {context.isHost && (
-              <div className="mt-4 w-full max-w-4xl">
+              <div className="mt-2 flex w-full max-w-4xl justify-center sm:mt-3">
                 <LayoutPicker
                   layout={outputStore.layout}
                   onLayoutChange={(l) => void handleLayoutChange(l)}
@@ -522,17 +532,33 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 />
               </div>
             )}
+
+            <MediaBar
+              micEnabled={micEnabled}
+              webcamEnabled={webcamEnabled}
+              onToggleMic={() => void toggleMic()}
+              onToggleWebcam={() => void toggleWebcam()}
+              onLeave={handleLeave}
+              onDeviceSettings={() => setShowDeviceSetup(true)}
+              leaveLabel={context.isHost ? 'Leave studio' : 'Leave'}
+              className="mt-2 sm:mt-3"
+            />
           </div>
 
-          <MediaBar
-            micEnabled={micEnabled}
-            webcamEnabled={webcamEnabled}
-            onToggleMic={() => void toggleMic()}
-            onToggleWebcam={() => void toggleWebcam()}
-            onLeave={handleLeave}
-            onDeviceSettings={() => setShowDeviceSetup(true)}
-            leaveLabel={context.isHost ? 'Leave studio' : 'Leave'}
-          />
+          {isDrawerMode && (
+            <StudioMobileNav
+              scenesOpen={scenesDrawerOpen}
+              controlsOpen={controlsDrawerOpen}
+              onScenesOpen={() => {
+                setControlsDrawerOpen(false)
+                setScenesDrawerOpen(true)
+              }}
+              onControlsOpen={() => {
+                setScenesDrawerOpen(false)
+                setControlsDrawerOpen(true)
+              }}
+            />
+          )}
         </main>
 
         <StudioSidebar
@@ -551,6 +577,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onHide={(sourceId) => void tileOrder.toggleHide(sourceId)}
           onMute={() => void toggleMic()}
           isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing || backgroundMusicStore.isMutating}
+          drawerOpen={controlsDrawerOpen}
+          onDrawerOpenChange={setControlsDrawerOpen}
         />
       </div>
     </div>

@@ -26,6 +26,15 @@ export const LAYOUTS: LayoutMeta[] = [
   { type: 'FULLSCREEN', label: 'Fullscreen', description: 'Host only, full frame', previewClass: 'preview-fullscreen' },
 ]
 
+export const PRIMARY_LAYOUT_TYPES: LayoutType[] = [
+  'CONTAIN',
+  'GRID',
+  'SIDE_BY_SIDE',
+  'SPOTLIGHT',
+  'PICTURE_IN_PICTURE',
+  'FULLSCREEN',
+]
+
 export function getLayoutMeta(type: LayoutType): LayoutMeta {
   return LAYOUTS.find((l) => l.type === type) ?? LAYOUTS[0]
 }

@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { BannerPicker } from '@/components/studio/sidebar/BannerPicker'
+import { GraphicsCollapsibleSection } from '@/components/studio/sidebar/GraphicsCollapsibleSection'
 import type { GraphicsState } from '@/types/graphics'
 import { bannerShouldShow } from '@/lib/graphics'
 
@@ -23,15 +23,12 @@ export function BannerSection({
   const isActive = bannerShouldShow(banner)
 
   return (
-    <div className="space-y-2 rounded-lg border border-border/60 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <Label className="text-xs font-semibold uppercase tracking-wide">Banner</Label>
-          <p className="text-[10px] text-muted-foreground">
-            Use a preset or create a custom lower-third. Optionally add a ticker in the same flow.
-          </p>
-        </div>
-        {onCreateCustom && (
+    <GraphicsCollapsibleSection
+      title="Banner"
+      description="Use a preset or create a custom lower-third. Optionally add a ticker in the same flow."
+      isActive={isActive}
+      headerActions={
+        onCreateCustom ? (
           <Button
             type="button"
             variant="outline"
@@ -43,9 +40,9 @@ export function BannerSection({
             <Plus className="h-3 w-3" />
             Create
           </Button>
-        )}
-      </div>
-
+        ) : undefined
+      }
+    >
       {isActive && banner && (
         <div className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5">
           <p className="text-[10px] font-medium">{banner.title}</p>
@@ -56,6 +53,6 @@ export function BannerSection({
       )}
 
       <BannerPicker banner={banner} disabled={disabled} onSelect={onSelect} onClear={onClear} />
-    </div>
+    </GraphicsCollapsibleSection>
   )
 }

@@ -43,11 +43,11 @@ export function SourceTileCard({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-lg border border-border/60 p-2 transition-colors',
-        source.isSpeaking && 'border-primary/50 bg-primary/5',
-        source.isPinned && 'ring-1 ring-primary/30',
+        'flex items-center gap-2 rounded-lg bg-background/60 p-2 transition-colors hover:bg-muted/50',
+        source.isSpeaking && 'ring-1 ring-primary/30 bg-primary/5',
+        source.isPinned && 'ring-1 ring-primary/20',
         source.isHidden && 'opacity-60',
-        isDragOver && 'border-primary bg-primary/5',
+        isDragOver && 'bg-primary/10 ring-1 ring-primary/40',
         isDragging && 'opacity-50',
       )}
       onDragOver={(event) => {

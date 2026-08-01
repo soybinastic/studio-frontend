@@ -33,7 +33,7 @@ export function TickerFormFields({ values, disabled, onChange }: TickerFormField
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="responsive-form-grid">
         <div className="space-y-2">
           <Label className="text-xs uppercase tracking-wide text-muted-foreground">Position</Label>
           <Select

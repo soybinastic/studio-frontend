@@ -1,5 +1,5 @@
-import { Label } from '@/components/ui/label'
 import { OverlayPicker } from '@/components/studio/sidebar/OverlayPicker'
+import { GraphicsCollapsibleSection } from '@/components/studio/sidebar/GraphicsCollapsibleSection'
 import type { GraphicsState } from '@/types/graphics'
 import { resolveGraphicUrl } from '@/lib/graphics'
 import type { OverlayPreset } from '@/lib/overlayPresets'
@@ -22,12 +22,11 @@ export function OverlaySection({
   const isActive = Boolean(overlay?.is_active && resolveGraphicUrl(overlay))
 
   return (
-    <div className="space-y-2 rounded-lg border border-border/60 p-3">
-      <Label className="text-xs font-semibold uppercase tracking-wide">Overlay</Label>
-      <p className="text-[10px] text-muted-foreground">
-        Click a thumbnail to apply. Renders on top of the video frame.
-      </p>
-
+    <GraphicsCollapsibleSection
+      title="Overlay"
+      description="Click a thumbnail to apply. Renders on top of the video frame."
+      isActive={isActive}
+    >
       <OverlayPicker
         presets={presets}
         selectedUrl={isActive ? resolveGraphicUrl(overlay) : undefined}
@@ -35,6 +34,6 @@ export function OverlaySection({
         onSelect={onSelect}
         onClear={onClear}
       />
-    </div>
+    </GraphicsCollapsibleSection>
   )
 }

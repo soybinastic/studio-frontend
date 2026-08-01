@@ -23,7 +23,7 @@ export function DialogContent({ className, children, ...props }: React.Component
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-card p-6 shadow-xl',
+          'fixed left-1/2 top-1/2 z-50 grid max-h-[min(92dvh,calc(100dvh-2rem))] w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-xl sm:w-[calc(100%-2rem)] sm:p-6',
           className,
         )}
         {...props}

@@ -91,13 +91,13 @@ export function JoinPage() {
 
   return (
     <div className="studio-grid-bg min-h-[calc(100dvh-3.5rem)]">
-      <div className="mx-auto flex max-w-lg flex-col justify-center px-4 py-12 sm:py-20">
+      <div className="mx-auto flex w-full max-w-lg flex-col justify-center px-[var(--space-page-x)] py-[var(--space-page-y)]">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <Users className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Join studio</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h1 className="text-fluid-2xl font-bold tracking-tight sm:text-fluid-3xl">Join studio</h1>
+          <p className="mt-2 text-fluid-sm text-muted-foreground">
             {hostName ? `Invited by ${hostName}` : 'Enter your name to join the live session.'}
           </p>
         </div>

@@ -24,11 +24,11 @@ export function MediaBar({
   className,
 }: MediaBarProps) {
   return (
-    <div className={cn('flex items-center justify-center gap-2 py-3', className)}>
+    <div className={cn('flex flex-wrap items-center justify-center gap-2 py-2 sm:py-3', className)}>
       <Button
         variant={micEnabled ? 'secondary' : 'destructive'}
         size="icon"
-        className="h-10 w-10 rounded-full"
+        className="touch-target h-11 w-11 rounded-full"
         onClick={onToggleMic}
         aria-label={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
       >
@@ -38,7 +38,7 @@ export function MediaBar({
       <Button
         variant={webcamEnabled ? 'secondary' : 'destructive'}
         size="icon"
-        className="h-10 w-10 rounded-full"
+        className="touch-target h-11 w-11 rounded-full"
         onClick={onToggleWebcam}
         aria-label={webcamEnabled ? 'Turn off camera' : 'Turn on camera'}
       >
@@ -49,7 +49,7 @@ export function MediaBar({
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 rounded-full"
+          className="touch-target h-11 w-11 rounded-full"
           onClick={onDeviceSettings}
           aria-label="Device settings"
         >
@@ -60,7 +60,7 @@ export function MediaBar({
       <Button
         variant="destructive"
         size="icon"
-        className="h-10 w-10 rounded-full"
+        className="touch-target h-11 w-11 rounded-full"
         onClick={onLeave}
         aria-label={leaveLabel}
       >

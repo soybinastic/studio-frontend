@@ -19,7 +19,7 @@ export function BackgroundPicker({
 }: BackgroundPickerProps) {
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
         {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url
           const previewSrc = preset.thumbnail ?? preset.url
