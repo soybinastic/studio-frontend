@@ -23,6 +23,7 @@ import { useGraphicsStore } from '@/hooks/useGraphicsStore'
 import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
 import { useTenant } from '@/context/TenantProvider'
+import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
 import { applyActiveScenePreviewState } from '@/lib/applyActiveScenePreview'
 import {
@@ -47,6 +48,7 @@ interface StudioLayoutProps {
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
   const { configuration, refreshConfiguration } = useTenant()
+  const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
   const [showSceneDevicePicker, setShowSceneDevicePicker] = useState(false)
@@ -380,18 +382,61 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     toast.success('Stream stopped')
   }, [outputStore, backendSync])
 
-  const handleLeave = useCallback(() => {
-    leave()
-    clearStudioContext()
-    navigate(context.isHost ? '/' : '/')
-  }, [leave, navigate, context.isHost])
-
   const handleEndSession = useCallback(async () => {
     await endSession(sessionId)
     leave()
     clearStudioContext()
     navigate('/')
   }, [sessionId, leave, navigate])
+
+  const showHeaderControls = roomEnabled && deviceStore.isSetupComplete
+  const showOutputControls = context.isHost && showHeaderControls
+
+  useEffect(() => {
+    if (!showHeaderControls) {
+      setControls(null)
+      return
+    }
+
+    setControls({
+      connectionState,
+      connectionError: error,
+      output: showOutputControls
+        ? {
+            recordingState: outputStore.recordingState,
+            streamingState: outputStore.streamingState,
+            savedDestinations: configuration?.destinations ?? [],
+            onStartRecording: () => void handleStartRecording(),
+            onStopRecording: () => void handleStopRecording(),
+            onStartStream: (type, destinations) => void handleStartStream(type, destinations),
+            onStopStream: () => void handleStopStream(),
+          }
+        : undefined,
+      onEndSession: showOutputControls ? () => void handleEndSession() : undefined,
+    })
+
+    return () => setControls(null)
+  }, [
+    showHeaderControls,
+    showOutputControls,
+    setControls,
+    connectionState,
+    error,
+    outputStore.recordingState,
+    outputStore.streamingState,
+    configuration?.destinations,
+    handleStartRecording,
+    handleStopRecording,
+    handleStartStream,
+    handleStopStream,
+    handleEndSession,
+  ])
+
+  const handleLeave = useCallback(() => {
+    leave()
+    clearStudioContext()
+    navigate(context.isHost ? '/' : '/')
+  }, [leave, navigate, context.isHost])
 
   const previewBackgroundMusic = useMemo(
     () => ({
@@ -444,21 +489,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         isSaving={sceneStore.isMutating}
       />
 
-      <TopToolbar
-        title={title}
-        subtitle={subtitle}
-        connectionState={connectionState}
-        connectionError={error}
-        isHost={context.isHost}
-        recordingState={outputStore.recordingState}
-        streamingState={outputStore.streamingState}
-        savedDestinations={configuration?.destinations ?? []}
-        onStartRecording={() => void handleStartRecording()}
-        onStopRecording={() => void handleStopRecording()}
-        onStartStream={(t, d) => void handleStartStream(t, d)}
-        onStopStream={() => void handleStopStream()}
-        onEndSession={context.isHost ? () => void handleEndSession() : undefined}
-      />
+      <TopToolbar title={title} subtitle={subtitle} />
 
       <div className="flex flex-1 overflow-hidden">
         <ScenesSidebar
