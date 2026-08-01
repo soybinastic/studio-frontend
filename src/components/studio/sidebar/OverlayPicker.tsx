@@ -1,19 +1,26 @@
 import { Check } from 'lucide-react'
-import { OVERLAY_PRESETS } from '@/lib/overlayPresets'
+import { OVERLAY_PRESETS, type OverlayPreset } from '@/lib/overlayPresets'
 import { cn } from '@/lib/utils'
 
 interface OverlayPickerProps {
+  presets?: OverlayPreset[]
   selectedUrl?: string
   disabled?: boolean
   onSelect: (url: string) => void
   onClear?: () => void
 }
 
-export function OverlayPicker({ selectedUrl, disabled, onSelect, onClear }: OverlayPickerProps) {
+export function OverlayPicker({
+  presets = OVERLAY_PRESETS,
+  selectedUrl,
+  disabled,
+  onSelect,
+  onClear,
+}: OverlayPickerProps) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">
-        {OVERLAY_PRESETS.map((preset) => {
+        {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url
           return (
             <button
@@ -32,7 +39,7 @@ export function OverlayPicker({ selectedUrl, disabled, onSelect, onClear }: Over
               aria-pressed={isSelected}
             >
               <img
-                src={preset.url}
+                src={preset.thumbnail ?? preset.url}
                 alt={preset.label}
                 className="h-full w-full object-cover"
                 loading="lazy"

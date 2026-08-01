@@ -1,19 +1,26 @@
 import { Check } from 'lucide-react'
-import { QR_PRESETS } from '@/lib/qrPresets'
+import { QR_PRESETS, type QrPreset } from '@/lib/qrPresets'
 import { cn } from '@/lib/utils'
 
 interface QrPickerProps {
+  presets?: QrPreset[]
   selectedUrl?: string
   disabled?: boolean
   onSelect: (url: string) => void
   onClear?: () => void
 }
 
-export function QrPicker({ selectedUrl, disabled, onSelect, onClear }: QrPickerProps) {
+export function QrPicker({
+  presets = QR_PRESETS,
+  selectedUrl,
+  disabled,
+  onSelect,
+  onClear,
+}: QrPickerProps) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
-        {QR_PRESETS.map((preset) => {
+        {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url
           return (
             <button
@@ -32,7 +39,7 @@ export function QrPicker({ selectedUrl, disabled, onSelect, onClear }: QrPickerP
               aria-pressed={isSelected}
             >
               <img
-                src={preset.url}
+                src={preset.thumbnail ?? preset.url}
                 alt={preset.label}
                 className="h-full w-full object-contain p-1"
                 loading="lazy"

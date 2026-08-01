@@ -22,6 +22,16 @@ import { useTileOrderStore } from '@/hooks/useTileOrderStore'
 import { useGraphicsStore } from '@/hooks/useGraphicsStore'
 import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
+import { useTenant } from '@/context/TenantProvider'
+import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
+import { applyActiveScenePreviewState } from '@/lib/applyActiveScenePreview'
+import {
+  ensureAllScenesLinked,
+  getLocalTenantConfiguration,
+  persistDestinationsFromStream,
+  persistLayout,
+  setPersistenceSessionId,
+} from '@/lib/persistenceSync'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
@@ -36,6 +46,7 @@ interface StudioLayoutProps {
 
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
+  const { configuration, refreshConfiguration } = useTenant()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
   const [showSceneDevicePicker, setShowSceneDevicePicker] = useState(false)
@@ -49,8 +60,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     initialLayout: context.layout,
   })
   const backendSync = useBackendSync(sessionId, context.isHost)
-  const graphicsStore = useGraphicsStore(sessionId, context.isHost)
   const sceneStore = useSceneStore(sessionId, context.isHost, outputStore.setCountdownState)
+  const graphicsStore = useGraphicsStore(sessionId, context.isHost, sceneStore.activeSceneId)
   const backgroundMusicStore = useBackgroundMusicStore({
     sessionId,
     isHost: context.isHost,
@@ -59,6 +70,48 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     onSceneUpdated: sceneStore.patchScene,
   })
   const prevCountdownActive = useRef(false)
+  const hydrationStartedRef = useRef(false)
+
+  useEffect(() => {
+    setPersistenceSessionId(sessionId)
+    return () => setPersistenceSessionId(null)
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!context.isHost || hydrationStartedRef.current) return
+    hydrationStartedRef.current = true
+
+    void (async () => {
+      try {
+        await refreshConfiguration()
+        const config = getLocalTenantConfiguration()
+        if (!config) return
+
+        await hydrateCompositorFromPersistence(sessionId, config)
+        const scenes = await sceneStore.refresh()
+        await ensureAllScenesLinked(sessionId, scenes)
+        applyActiveScenePreviewState(scenes, {
+          outputStore,
+          graphicsStore,
+          backgroundMusicStore,
+          deviceStore,
+          tenantDevices: config.devices,
+        })
+        await graphicsStore.refresh({ force: true })
+      } catch (err) {
+        console.warn('[persistence] studio hydration failed', err)
+      }
+    })()
+  }, [
+    context.isHost,
+    sessionId,
+    sceneStore,
+    outputStore,
+    graphicsStore,
+    backgroundMusicStore,
+    deviceStore,
+    refreshConfiguration,
+  ])
 
   const {
     connectionState,
@@ -160,6 +213,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     async (layout: LayoutType) => {
       outputStore.setLayout(layout)
       await backendSync.syncLayout(layout)
+      void persistLayout(layout)
       toast.success(`Layout: ${layout}`)
     },
     [outputStore, backendSync],
@@ -308,6 +362,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const handleStartStream = useCallback(
     async (type: 'RTMP' | 'HLS', destinations?: Parameters<typeof backendSync.syncStartStreaming>[1]) => {
       outputStore.setStreamingAction('starting')
+      if (type === 'RTMP' && destinations?.length) {
+        void persistDestinationsFromStream(destinations)
+      }
       await backendSync.syncStartStreaming(type, destinations)
       outputStore.setStreamingAction(null)
       await outputStore.refresh()
@@ -395,6 +452,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         isHost={context.isHost}
         recordingState={outputStore.recordingState}
         streamingState={outputStore.streamingState}
+        savedDestinations={configuration?.destinations ?? []}
         onStartRecording={() => void handleStartRecording()}
         onStopRecording={() => void handleStopRecording()}
         onStartStream={(t, d) => void handleStartStream(t, d)}
@@ -455,6 +513,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           backgroundMusicStore={backgroundMusicStore}
           inviteUrl={context.isHost ? context.inviteUrl : undefined}
           onGraphicUpdate={(layer, value) => void graphicsStore.updateLayer(layer, value)}
+          onGraphicUpdateLayers={(partial) => void graphicsStore.updateLayers(partial)}
           onReorderSources={(from, to) => void tileOrder.reorderSources(from, to)}
           onResetTileOrder={() => void tileOrder.resetTileOrder()}
           onPin={tileOrder.togglePin}

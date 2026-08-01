@@ -8,11 +8,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { BackgroundPicker } from '@/components/studio/sidebar/BackgroundPicker'
+import type { BackgroundPreset } from '@/lib/backgroundPresets'
 import type { LayoutType } from '@/types/session'
 import type { GraphicsState } from '@/types/graphics'
-import { layoutSupportsBackground } from '@/lib/graphics'
+import { layoutSupportsBackground, resolveGraphicUrl } from '@/lib/graphics'
 
 interface BackgroundSectionProps {
+  presets?: BackgroundPreset[]
   layout: LayoutType
   background: GraphicsState['background']
   disabled?: boolean
@@ -22,6 +24,7 @@ interface BackgroundSectionProps {
 }
 
 export function BackgroundSection({
+  presets,
   layout,
   background,
   disabled,
@@ -29,7 +32,7 @@ export function BackgroundSection({
   onClear,
   onFitChange,
 }: BackgroundSectionProps) {
-  const isActive = Boolean(background?.is_active && background.url)
+  const isActive = Boolean(background?.is_active && resolveGraphicUrl(background))
   const backgroundSupported = layoutSupportsBackground(layout)
 
   return (
@@ -47,7 +50,8 @@ export function BackgroundSection({
       )}
 
       <BackgroundPicker
-        selectedUrl={isActive ? background?.url : undefined}
+        presets={presets}
+        selectedUrl={isActive ? resolveGraphicUrl(background) : undefined}
         disabled={disabled}
         onSelect={onSelect}
         onClear={onClear}

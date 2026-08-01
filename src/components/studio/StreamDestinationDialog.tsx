@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { StreamDestinationInput } from '@/api/streaming'
+import type { PersistedDestination } from '@/types/persistence'
 
 const RTMP_PLATFORM_PRESETS = [
   { label: 'Twitch', placeholder: 'rtmp://live.twitch.tv/app/<stream-key>' },
@@ -33,29 +34,55 @@ interface StreamDestinationDraft {
   id: string
   label: string
   url: string
+  destinationId?: string
 }
 
 export interface StreamDestinationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onStartStream: (type: 'RTMP' | 'HLS', destinations?: StreamDestinationInput[]) => void
+  savedDestinations?: PersistedDestination[]
   trigger?: React.ReactNode
 }
 
-function createDestinationDraft(label = 'Custom'): StreamDestinationDraft {
-  return { id: crypto.randomUUID(), label, url: '' }
+function createDestinationDraft(
+  label = 'Custom',
+  url = '',
+  destinationId?: string,
+): StreamDestinationDraft {
+  return { id: crypto.randomUUID(), label, url, destinationId }
+}
+
+function draftsFromSaved(savedDestinations: PersistedDestination[]): StreamDestinationDraft[] {
+  if (savedDestinations.length === 0) {
+    return [createDestinationDraft('Twitch')]
+  }
+  return savedDestinations.map((destination) =>
+    createDestinationDraft(
+      destination.label || 'Custom',
+      destination.url,
+      destination.destination_id,
+    ),
+  )
 }
 
 export function StreamDestinationDialog({
   open,
   onOpenChange,
   onStartStream,
+  savedDestinations = [],
   trigger,
 }: StreamDestinationDialogProps) {
   const [streamType, setStreamType] = useState<'RTMP' | 'HLS'>('RTMP')
-  const [destinations, setDestinations] = useState<StreamDestinationDraft[]>([
-    createDestinationDraft('Twitch'),
-  ])
+  const [destinations, setDestinations] = useState<StreamDestinationDraft[]>(() =>
+    draftsFromSaved(savedDestinations),
+  )
+
+  useEffect(() => {
+    if (open) {
+      setDestinations(draftsFromSaved(savedDestinations))
+    }
+  }, [open, savedDestinations])
 
   const validDestinations = destinations.filter((item) => item.url.trim())
 

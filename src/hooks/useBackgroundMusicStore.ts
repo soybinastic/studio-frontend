@@ -15,6 +15,7 @@ import {
 } from '@/api/backgroundMusicCompositor'
 import { useBrowserBackgroundMusic } from '@/hooks/useBrowserBackgroundMusic'
 import { normalizeBackgroundMusicConfig } from '@/lib/backgroundMusic'
+import { persistBackgroundMusic } from '@/lib/persistenceSync'
 import type { BackgroundMusicPreset } from '@/lib/backgroundMusicPresets'
 import type { BackgroundMusicRuntimeState } from '@/types/backgroundMusic'
 import type { BackgroundMusicConfig, Scene } from '@/types/scenes'
@@ -117,6 +118,7 @@ export function useBackgroundMusicStore({
           ...activeScene!,
           background_music: normalized,
         })
+        void persistBackgroundMusic(sessionId, activeSceneId, normalized)
         return normalized
       } catch (err) {
         const previous = normalizeBackgroundMusicConfig(activeScene?.background_music)
@@ -151,6 +153,7 @@ export function useBackgroundMusicStore({
           ...activeScene!,
           background_music: normalized,
         })
+        void persistBackgroundMusic(sessionId, activeSceneId, normalized)
         return normalized
       } catch (err) {
         const msg = err instanceof ApiError ? err.message : 'Failed to select track'
@@ -238,6 +241,7 @@ export function useBackgroundMusicStore({
           ...activeScene!,
           background_music: normalized,
         })
+        void persistBackgroundMusic(sessionId, activeSceneId, normalized)
         return normalized
       } catch (err) {
         const previous = normalizeBackgroundMusicConfig(activeScene?.background_music)

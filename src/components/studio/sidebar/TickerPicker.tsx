@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react'
 import { isSameTickerPreset, TICKER_PRESETS } from '@/lib/bannerTickerPresets'
 import type { TickerGraphic } from '@/types/graphics'
+import { tickerShouldShow } from '@/lib/graphics'
 import { cn } from '@/lib/utils'
 
 interface TickerPickerProps {
@@ -11,7 +12,7 @@ interface TickerPickerProps {
 }
 
 export function TickerPicker({ ticker, disabled, onSelect, onClear }: TickerPickerProps) {
-  const activePreset = TICKER_PRESETS.find((preset) => isSameTickerPreset(ticker, preset))
+  const isActive = tickerShouldShow(ticker)
 
   return (
     <div className="space-y-2">
@@ -55,7 +56,7 @@ export function TickerPicker({ ticker, disabled, onSelect, onClear }: TickerPick
         })}
       </div>
 
-      {activePreset && onClear && (
+      {isActive && onClear && (
         <button
           type="button"
           disabled={disabled}

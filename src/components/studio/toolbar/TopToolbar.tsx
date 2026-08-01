@@ -21,6 +21,7 @@ import { ConnectionBanner } from '@/components/studio/ConnectionBanner'
 import { StreamDestinationDialog } from '@/components/studio/StreamDestinationDialog'
 import type { StreamDestinationInput } from '@/api/streaming'
 import { streamDestinationModalEnabled } from '@/lib/featureFlags'
+import type { PersistedDestination } from '@/types/persistence'
 import type { ConnectionState } from '@/types/session'
 import type { OutputState } from '@/types/studio'
 import { cn } from '@/lib/utils'
@@ -33,6 +34,7 @@ interface TopToolbarProps {
   isHost: boolean
   recordingState: OutputState
   streamingState: OutputState
+  savedDestinations?: PersistedDestination[]
   onStartRecording: () => void
   onStopRecording: () => void
   onStartStream: (type: 'RTMP' | 'HLS', destinations?: StreamDestinationInput[]) => void
@@ -117,6 +119,7 @@ export function TopToolbar({
   isHost,
   recordingState,
   streamingState,
+  savedDestinations = [],
   onStartRecording,
   onStopRecording,
   onStartStream,
@@ -168,6 +171,7 @@ export function TopToolbar({
                 open={streamOpen}
                 onOpenChange={setStreamOpen}
                 onStartStream={onStartStream}
+                savedDestinations={savedDestinations}
                 trigger={<GoLiveButton streamingState={streamingState} />}
               />
             ) : (

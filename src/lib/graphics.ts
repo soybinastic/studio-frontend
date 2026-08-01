@@ -74,3 +74,9 @@ export function emptyGraphicsState(): GraphicsState {
 export function mergeGraphicsState(base: GraphicsState | null, patch: Partial<GraphicsState>): GraphicsState {
   return { ...emptyGraphicsState(), ...base, ...patch }
 }
+
+/** True when at least one graphics layer is explicitly set (not null/undefined). */
+export function hasNonNullGraphicsLayers(state: Partial<GraphicsState> | null | undefined): boolean {
+  if (!state) return false
+  return Object.values(state).some((value) => value != null)
+}

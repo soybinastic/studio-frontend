@@ -8,6 +8,13 @@ import {
   updateScene,
 } from '@/api/scenes'
 import { ApiError } from '@/api/client'
+import {
+  persistActiveScene,
+  persistDevices,
+  persistSceneCreate,
+  persistSceneDelete,
+  persistSceneUpdate,
+} from '@/lib/persistenceSync'
 import type { DeviceSelection } from '@/types/devices'
 import type { Scene, SceneActivateResponse } from '@/types/scenes'
 import type { CountdownState } from '@/types/session'
@@ -65,6 +72,10 @@ export function useSceneStore(
           devices: toSceneDevicesPayload(devices),
         })
         setScenes((prev) => prev.map((s) => (s.scene_id === sceneId ? updated : s)))
+        void persistSceneUpdate(sessionId, sceneId, {
+          devices: toSceneDevicesPayload(devices),
+        })
+        void persistDevices(toSceneDevicesPayload(devices))
         return updated
       } catch (err) {
         const msg = err instanceof ApiError ? err.message : 'Failed to save scene devices'
@@ -94,6 +105,10 @@ export function useSceneStore(
           type: 'CAMERA',
           devices: toSceneDevicesPayload(devices),
         })
+        void persistSceneCreate(sessionId, scene, {
+          type: 'CAMERA',
+          devices: toSceneDevicesPayload(devices),
+        })
         const list = await refresh()
         toast.success(`Created ${scene.name}`)
         const activeScene = list.find((s) => s.is_active) ?? null
@@ -115,6 +130,11 @@ export function useSceneStore(
       setIsMutating(true)
       try {
         const scene = await createScene(sessionId, {
+          type: 'COUNTDOWN',
+          duration_seconds: durationSeconds,
+          target_scene_id: targetSceneId,
+        })
+        void persistSceneCreate(sessionId, scene, {
           type: 'COUNTDOWN',
           duration_seconds: durationSeconds,
           target_scene_id: targetSceneId,
@@ -149,6 +169,7 @@ export function useSceneStore(
         setScenes((prev) =>
           prev.map((s) => (s.scene_id === sceneId ? updated : s)),
         )
+        void persistSceneUpdate(sessionId, sceneId, { name: trimmed })
       } catch (err) {
         setScenes(previous)
         const msg = err instanceof ApiError ? err.message : 'Failed to rename scene'
@@ -164,6 +185,7 @@ export function useSceneStore(
       setIsMutating(true)
       try {
         await deleteScene(sessionId, sceneId)
+        void persistSceneDelete(sessionId, sceneId)
         setScenes((prev) => prev.filter((s) => s.scene_id !== sceneId))
         toast.success('Scene deleted')
         return true
@@ -201,6 +223,7 @@ export function useSceneStore(
           })),
         )
         setActiveSceneId(sceneId)
+        void persistActiveScene(sceneId)
         onCountdownState?.(null)
         toast.success(`Switched to ${result.scene.name}`)
         return result

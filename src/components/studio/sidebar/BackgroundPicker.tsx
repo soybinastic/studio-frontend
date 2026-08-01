@@ -1,20 +1,30 @@
-import { Check } from 'lucide-react'
-import { BACKGROUND_PRESETS } from '@/lib/backgroundPresets'
+import { Check, Film } from 'lucide-react'
+import { BACKGROUND_PRESETS, type BackgroundPreset } from '@/lib/backgroundPresets'
 import { cn } from '@/lib/utils'
 
 interface BackgroundPickerProps {
+  presets?: BackgroundPreset[]
   selectedUrl?: string
   disabled?: boolean
   onSelect: (url: string) => void
   onClear?: () => void
 }
 
-export function BackgroundPicker({ selectedUrl, disabled, onSelect, onClear }: BackgroundPickerProps) {
+export function BackgroundPicker({
+  presets = BACKGROUND_PRESETS,
+  selectedUrl,
+  disabled,
+  onSelect,
+  onClear,
+}: BackgroundPickerProps) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">
-        {BACKGROUND_PRESETS.map((preset) => {
+        {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url
+          const previewSrc = preset.thumbnail ?? preset.url
+          const isVideo = preset.type === 'video'
+
           return (
             <button
               key={preset.id}
@@ -31,12 +41,23 @@ export function BackgroundPicker({ selectedUrl, disabled, onSelect, onClear }: B
               aria-label={`Select ${preset.label} background`}
               aria-pressed={isSelected}
             >
-              <img
-                src={preset.url}
-                alt={preset.label}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
+              {isVideo && !preset.thumbnail ? (
+                <div className="flex h-full w-full flex-col items-center justify-center bg-zinc-900/80 text-muted-foreground">
+                  <Film className="h-5 w-5" />
+                </div>
+              ) : (
+                <img
+                  src={previewSrc}
+                  alt={preset.label}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              )}
+              {isVideo && (
+                <span className="absolute left-1 top-1 rounded bg-black/60 px-1 py-0.5 text-[8px] font-medium uppercase text-white">
+                  Video
+                </span>
+              )}
               {isSelected && (
                 <span className="absolute inset-0 flex items-center justify-center bg-primary/20">
                   <Check className="h-4 w-4 text-primary drop-shadow" />

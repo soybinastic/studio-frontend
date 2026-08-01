@@ -2,6 +2,7 @@ export interface QrPreset {
   id: string
   label: string
   url: string
+  thumbnail?: string
 }
 
 export const QR_PRESETS: QrPreset[] = [
