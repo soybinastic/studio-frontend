@@ -11,6 +11,8 @@ export interface StartStreamRequest {
   destination_url?: string
   destination_urls?: string[]
   destinations?: StreamDestinationInput[]
+  tenant_id?: string
+  twitch_chat_enabled?: boolean
 }
 
 export function listStreams(sessionId: string) {

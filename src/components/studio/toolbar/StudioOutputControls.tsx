@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { StreamDestinationDialog } from '@/components/studio/StreamDestinationDialog'
 import type { StreamDestinationInput } from '@/api/streaming'
 import { streamDestinationModalEnabled } from '@/lib/featureFlags'
-import type { PersistedDestination } from '@/types/persistence'
+import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
 import type { OutputState } from '@/types/studio'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +18,7 @@ export interface StudioOutputControlsProps {
   recordingState: OutputState
   streamingState: OutputState
   savedDestinations?: PersistedDestination[]
+  platformConnections?: PersistedPlatformConnection[]
   onStartRecording: () => void
   onStopRecording: () => void
   onStartStream: (type: 'RTMP' | 'HLS', destinations?: StreamDestinationInput[]) => void
@@ -109,6 +110,7 @@ export function StudioOutputControls({
   recordingState,
   streamingState,
   savedDestinations = [],
+  platformConnections = [],
   onStartRecording,
   onStopRecording,
   onStartStream,
@@ -152,6 +154,7 @@ export function StudioOutputControls({
           onOpenChange={setStreamOpen}
           onStartStream={onStartStream}
           savedDestinations={savedDestinations}
+          platformConnections={platformConnections}
           trigger={<StartStreamButton streamingState={streamingState} compact={compact} />}
         />
       ) : (

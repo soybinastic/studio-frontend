@@ -2,10 +2,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import { DestinationOutputsModal } from '@/components/destinations/DestinationOutputsModal'
 import { useDestinations } from '@/hooks/useDestinations'
 
@@ -19,10 +22,37 @@ const DestinationOutputsContext = createContext<DestinationOutputsContextValue |
 
 export function DestinationOutputsProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
-  const destinationsState = useDestinations()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const destinationsState = useDestinations({
+    onTwitchConnected: () => setOpen(true),
+  })
+  const { reload } = destinationsState
 
   const openDestinations = useCallback(() => setOpen(true), [])
   const closeDestinations = useCallback(() => setOpen(false), [])
+
+  useEffect(() => {
+    const twitchResult = searchParams.get('twitch')
+    if (!twitchResult) return
+
+    const message = searchParams.get('message')
+
+    if (twitchResult === 'connected') {
+      void reload().then(() => {
+        toast.success('Twitch connected successfully')
+        setOpen(true)
+      })
+    } else if (twitchResult === 'error') {
+      toast.error(message ? decodeURIComponent(message.replace(/\+/g, ' ')) : 'Twitch connection failed')
+    }
+
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('twitch')
+    nextParams.delete('message')
+    nextParams.delete('connection_id')
+    nextParams.delete('platform')
+    setSearchParams(nextParams, { replace: true })
+  }, [reload, searchParams, setSearchParams])
 
   const value = useMemo(
     () => ({ open, openDestinations, closeDestinations }),

@@ -66,13 +66,23 @@ export function useBackendSync(sessionId: string, enabled: boolean) {
   )
 
   const syncStartStreaming = useCallback(
-    (destinationType: 'RTMP' | 'HLS', destinations?: StreamDestinationInput[]) =>
+    (
+      destinationType: 'RTMP' | 'HLS',
+      destinations?: StreamDestinationInput[],
+      options?: { tenantId?: string; twitchChatEnabled?: boolean },
+    ) =>
       wrap(() =>
         destinationType === 'HLS'
-          ? startStream(sessionId, { destination_type: 'HLS' })
+          ? startStream(sessionId, {
+              destination_type: 'HLS',
+              tenant_id: options?.tenantId,
+              twitch_chat_enabled: options?.twitchChatEnabled,
+            })
           : startStream(sessionId, {
               destination_type: 'RTMP',
               destinations: destinations?.filter((d) => d.url.trim()),
+              tenant_id: options?.tenantId,
+              twitch_chat_enabled: options?.twitchChatEnabled,
             }),
       ),
     [wrap, sessionId],

@@ -19,8 +19,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { PlatformIcon, getPlatformLabel } from '@/components/destinations/PlatformIcon'
 import type { StreamDestinationInput } from '@/api/streaming'
-import type { PersistedDestination } from '@/types/persistence'
+import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
+import type { DestinationPlatform } from '@/types/destinations'
+import { DestinationPlatform as Platform } from '@/types/destinations'
+import {
+  getConnectionForDestination,
+  getStreamableDestinations,
+  maskRtmpUrl,
+  toStreamDestinationInputs,
+} from '@/lib/streamDestinations'
+import { cn } from '@/lib/utils'
 
 const RTMP_PLATFORM_PRESETS = [
   { label: 'Twitch', placeholder: 'rtmp://live.twitch.tv/app/<stream-key>' },
@@ -42,6 +53,7 @@ export interface StreamDestinationDialogProps {
   onOpenChange: (open: boolean) => void
   onStartStream: (type: 'RTMP' | 'HLS', destinations?: StreamDestinationInput[]) => void
   savedDestinations?: PersistedDestination[]
+  platformConnections?: PersistedPlatformConnection[]
   trigger?: React.ReactNode
 }
 
@@ -59,11 +71,19 @@ function draftsFromSaved(savedDestinations: PersistedDestination[]): StreamDesti
   }
   return savedDestinations.map((destination) =>
     createDestinationDraft(
-      destination.label || 'Custom',
+      destination.label || destination.platform || 'Custom',
       destination.url,
       destination.destination_id,
     ),
   )
+}
+
+function resolvePlatform(destination: PersistedDestination): DestinationPlatform {
+  if (destination.platform === Platform.TWITCH) return Platform.TWITCH
+  if (destination.platform === Platform.YOUTUBE) return Platform.YOUTUBE
+  if (destination.platform === Platform.FACEBOOK) return Platform.FACEBOOK
+  if (destination.platform === Platform.CUSTOM_RTMP) return Platform.CUSTOM_RTMP
+  return Platform.CUSTOM_RTMP
 }
 
 export function StreamDestinationDialog({
@@ -71,37 +91,91 @@ export function StreamDestinationDialog({
   onOpenChange,
   onStartStream,
   savedDestinations = [],
+  platformConnections = [],
   trigger,
 }: StreamDestinationDialogProps) {
   const [streamType, setStreamType] = useState<'RTMP' | 'HLS'>('RTMP')
-  const [destinations, setDestinations] = useState<StreamDestinationDraft[]>(() =>
+  const streamableSaved = getStreamableDestinations(savedDestinations, platformConnections)
+  const hasSavedDestinations = streamableSaved.length > 0
+
+  const [selectedSavedIds, setSelectedSavedIds] = useState<Set<string>>(
+    () => new Set(streamableSaved.map((d) => d.destination_id)),
+  )
+  const [manualDestinations, setManualDestinations] = useState<StreamDestinationDraft[]>([])
+  const [legacyDestinations, setLegacyDestinations] = useState<StreamDestinationDraft[]>(() =>
     draftsFromSaved(savedDestinations),
   )
 
   useEffect(() => {
-    if (open) {
-      setDestinations(draftsFromSaved(savedDestinations))
-    }
-  }, [open, savedDestinations])
+    if (!open) return
+    const nextStreamable = getStreamableDestinations(savedDestinations, platformConnections)
+    setSelectedSavedIds(new Set(nextStreamable.map((d) => d.destination_id)))
+    setManualDestinations([])
+    setLegacyDestinations(draftsFromSaved(savedDestinations))
+  }, [open, savedDestinations, platformConnections])
 
-  const validDestinations = destinations.filter((item) => item.url.trim())
+  const selectedSaved = streamableSaved.filter((d) => selectedSavedIds.has(d.destination_id))
+  const validManualDestinations = manualDestinations.filter((item) => item.url.trim())
+  const validLegacyDestinations = legacyDestinations.filter((item) => item.url.trim())
 
-  const handleAddDestination = () => {
-    setDestinations((current) => [...current, createDestinationDraft()])
+  const resolvedDestinations = hasSavedDestinations
+    ? [
+        ...toStreamDestinationInputs(selectedSaved),
+        ...validManualDestinations.map((item) => ({
+          url: item.url.trim(),
+          label: item.label.trim() || 'Custom',
+        })),
+      ]
+    : validLegacyDestinations.map((item) => ({
+        url: item.url.trim(),
+        label: item.label.trim() || 'Custom',
+      }))
+
+  const toggleSavedDestination = (destinationId: string) => {
+    setSelectedSavedIds((current) => {
+      const next = new Set(current)
+      if (next.has(destinationId)) {
+        next.delete(destinationId)
+      } else {
+        next.add(destinationId)
+      }
+      return next
+    })
   }
 
-  const handleRemoveDestination = (id: string) => {
-    setDestinations((current) =>
-      current.length === 1 ? current : current.filter((item) => item.id !== id),
-    )
+  const handleAddManualDestination = () => {
+    setManualDestinations((current) => [...current, createDestinationDraft()])
   }
 
-  const handleDestinationChange = (
+  const handleRemoveManualDestination = (id: string) => {
+    setManualDestinations((current) => current.filter((item) => item.id !== id))
+  }
+
+  const handleManualDestinationChange = (
     id: string,
     patch: Partial<Pick<StreamDestinationDraft, 'label' | 'url'>>,
   ) => {
-    setDestinations((current) =>
+    setManualDestinations((current) =>
       current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    )
+  }
+
+  const handleLegacyDestinationChange = (
+    id: string,
+    patch: Partial<Pick<StreamDestinationDraft, 'label' | 'url'>>,
+  ) => {
+    setLegacyDestinations((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    )
+  }
+
+  const handleAddLegacyDestination = () => {
+    setLegacyDestinations((current) => [...current, createDestinationDraft()])
+  }
+
+  const handleRemoveLegacyDestination = (id: string) => {
+    setLegacyDestinations((current) =>
+      current.length === 1 ? current : current.filter((item) => item.id !== id),
     )
   }
 
@@ -109,13 +183,7 @@ export function StreamDestinationDialog({
     if (streamType === 'HLS') {
       onStartStream('HLS')
     } else {
-      onStartStream(
-        'RTMP',
-        validDestinations.map((item) => ({
-          url: item.url.trim(),
-          label: item.label.trim() || 'Custom',
-        })),
-      )
+      onStartStream('RTMP', resolvedDestinations)
     }
     onOpenChange(false)
   }
@@ -127,7 +195,7 @@ export function StreamDestinationDialog({
         <DialogHeader>
           <DialogTitle>Start streaming</DialogTitle>
           <DialogDescription>
-            Send compositor output to one or more RTMP destinations, or generate HLS locally.
+            Send compositor output to your connected destinations or add a one-time RTMP target.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -144,17 +212,63 @@ export function StreamDestinationDialog({
             </Select>
           </div>
 
-          {streamType === 'RTMP' && (
+          {streamType === 'RTMP' && hasSavedDestinations && (
             <div className="space-y-3">
+              <Label>Connected destinations</Label>
+              <div className="space-y-2">
+                {streamableSaved.map((destination) => {
+                  const connection = getConnectionForDestination(
+                    destination.destination_id,
+                    platformConnections,
+                  )
+                  const platform = resolvePlatform(destination)
+                  const isSelected = selectedSavedIds.has(destination.destination_id)
+
+                  return (
+                    <label
+                      key={destination.destination_id}
+                      className={cn(
+                        'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                        isSelected
+                          ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
+                          : 'border-border/60 hover:border-primary/30',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-primary"
+                        checked={isSelected}
+                        onChange={() => toggleSavedDestination(destination.destination_id)}
+                      />
+                      <PlatformIcon platform={platform} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{destination.label || getPlatformLabel(platform)}</p>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {getPlatformLabel(platform)}
+                          </Badge>
+                          {connection?.status === 'streaming' && (
+                            <Badge variant="live">Streaming</Badge>
+                          )}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {maskRtmpUrl(destination.url)}
+                        </p>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+
               <div className="flex items-center justify-between">
-                <Label>Destinations</Label>
-                <Button type="button" variant="outline" size="sm" onClick={handleAddDestination}>
+                <Label>Add one-time destination</Label>
+                <Button type="button" variant="outline" size="sm" onClick={handleAddManualDestination}>
                   <Plus className="mr-1 h-3.5 w-3.5" />
                   Add
                 </Button>
               </div>
 
-              {destinations.map((destination, index) => {
+              {manualDestinations.map((destination, index) => {
                 const preset =
                   RTMP_PLATFORM_PRESETS.find((item) => item.label === destination.label) ??
                   RTMP_PLATFORM_PRESETS[RTMP_PLATFORM_PRESETS.length - 1]
@@ -162,29 +276,26 @@ export function StreamDestinationDialog({
                 return (
                   <div
                     key={destination.id}
-                    className="space-y-2 rounded-lg border border-border/60 p-3"
+                    className="space-y-2 rounded-lg border border-dashed border-border/60 p-3"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <Label className="text-xs text-muted-foreground">
-                        Destination {index + 1}
-                      </Label>
-                      {destinations.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleRemoveDestination(destination.id)}
-                          aria-label="Remove destination"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+                      <Label className="text-xs text-muted-foreground">One-time {index + 1}</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleRemoveManualDestination(destination.id)}
+                        aria-label="Remove destination"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-
                     <Select
                       value={destination.label}
-                      onValueChange={(value) => handleDestinationChange(destination.id, { label: value })}
+                      onValueChange={(value) =>
+                        handleManualDestinationChange(destination.id, { label: value })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -197,12 +308,76 @@ export function StreamDestinationDialog({
                         ))}
                       </SelectContent>
                     </Select>
-
                     <Input
                       placeholder={preset.placeholder}
                       value={destination.url}
                       onChange={(e) =>
-                        handleDestinationChange(destination.id, { url: e.target.value })
+                        handleManualDestinationChange(destination.id, { url: e.target.value })
+                      }
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {streamType === 'RTMP' && !hasSavedDestinations && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Destinations</Label>
+                <Button type="button" variant="outline" size="sm" onClick={handleAddLegacyDestination}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add
+                </Button>
+              </div>
+
+              {legacyDestinations.map((destination, index) => {
+                const preset =
+                  RTMP_PLATFORM_PRESETS.find((item) => item.label === destination.label) ??
+                  RTMP_PLATFORM_PRESETS[RTMP_PLATFORM_PRESETS.length - 1]
+
+                return (
+                  <div
+                    key={destination.id}
+                    className="space-y-2 rounded-lg border border-border/60 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs text-muted-foreground">Destination {index + 1}</Label>
+                      {legacyDestinations.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleRemoveLegacyDestination(destination.id)}
+                          aria-label="Remove destination"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    <Select
+                      value={destination.label}
+                      onValueChange={(value) =>
+                        handleLegacyDestinationChange(destination.id, { label: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RTMP_PLATFORM_PRESETS.map((item) => (
+                          <SelectItem key={item.label} value={item.label}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      placeholder={preset.placeholder}
+                      value={destination.url}
+                      onChange={(e) =>
+                        handleLegacyDestinationChange(destination.id, { url: e.target.value })
                       }
                     />
                   </div>
@@ -210,8 +385,8 @@ export function StreamDestinationDialog({
               })}
 
               <p className="text-xs text-muted-foreground">
-                Stream simultaneously to Twitch, YouTube, Facebook, TikTok, or any custom RTMP
-                endpoint. Each destination gets its own encoded output branch.
+                Connect destinations from the header menu to reuse Twitch, YouTube, or custom RTMP
+                targets without re-entering stream keys.
               </p>
             </div>
           )}
@@ -223,7 +398,7 @@ export function StreamDestinationDialog({
           <Button
             variant="live"
             onClick={handleStartStream}
-            disabled={streamType === 'RTMP' && validDestinations.length === 0}
+            disabled={streamType === 'RTMP' && resolvedDestinations.length === 0}
           >
             Start stream
           </Button>

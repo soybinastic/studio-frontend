@@ -27,6 +27,7 @@ import { useTenant } from '@/context/TenantProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
 import { applyActiveScenePreviewState } from '@/lib/applyActiveScenePreview'
+import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
   ensureAllScenesLinked,
   getLocalTenantConfiguration,
@@ -34,6 +35,13 @@ import {
   persistLayout,
   setPersistenceSessionId,
 } from '@/lib/persistenceSync'
+import {
+  formatStreamDestinationSummary,
+  getStreamableDestinations,
+  hasTwitchStreamDestination,
+  refreshTwitchStreamKeys,
+  toStreamDestinationInputs,
+} from '@/lib/streamDestinations'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
@@ -48,7 +56,7 @@ interface StudioLayoutProps {
 
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
-  const { configuration, refreshConfiguration } = useTenant()
+  const { configuration, refreshConfiguration, tenantId } = useTenant()
   const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
@@ -82,6 +90,10 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const savedDestinations = useMemo(
     () => configuration?.destinations ?? [],
     [configuration?.destinations],
+  )
+  const platformConnections = useMemo(
+    () => configuration?.platform_connections ?? [],
+    [configuration?.platform_connections],
   )
   const sceneStore = useSceneStore(sessionId, context.isHost, outputStore.setCountdownState)
   const graphicsStore = useGraphicsStore(sessionId, context.isHost, sceneStore.activeSceneId)
@@ -374,14 +386,76 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const handleStartStream = useCallback(
     async (type: 'RTMP' | 'HLS', destinations?: Parameters<typeof syncStartStreaming>[1]) => {
       setStreamingAction('starting')
-      if (type === 'RTMP' && destinations?.length) {
-        void persistDestinationsFromStream(destinations)
+      try {
+        if (type === 'HLS') {
+          const result = await syncStartStreaming('HLS')
+          if (result) toast.success('HLS stream started')
+          return
+        }
+
+        let resolvedDestinations = destinations
+
+        if (tenantId && isPersistenceEnabled()) {
+          await refreshTwitchStreamKeys(tenantId, platformConnections)
+          await refreshConfiguration()
+          const freshConfig = getLocalTenantConfiguration()
+          const freshStreamable = getStreamableDestinations(
+            freshConfig?.destinations ?? [],
+            freshConfig?.platform_connections ?? [],
+          )
+
+          if (resolvedDestinations?.length) {
+            const selectedLabels = new Set(
+              resolvedDestinations.map((item) => item.label?.trim() || 'Custom'),
+            )
+            const fromSaved = toStreamDestinationInputs(
+              freshStreamable.filter((item) =>
+                selectedLabels.has(item.label.trim() || item.platform || 'Custom'),
+              ),
+            )
+            const manual = resolvedDestinations.filter(
+              (item) =>
+                !freshStreamable.some(
+                  (saved) =>
+                    (saved.label.trim() || saved.platform || 'Custom') ===
+                    (item.label?.trim() || 'Custom'),
+                ),
+            )
+            resolvedDestinations = [...fromSaved, ...manual]
+
+            if (manual.length > 0) {
+              void persistDestinationsFromStream(manual)
+            }
+          } else {
+            resolvedDestinations = toStreamDestinationInputs(freshStreamable)
+          }
+        }
+
+        if (!resolvedDestinations?.length) {
+          toast.error('No connected destinations available. Connect a destination first.')
+          return
+        }
+
+        const result = await syncStartStreaming('RTMP', resolvedDestinations, {
+          tenantId: tenantId ?? undefined,
+          twitchChatEnabled: hasTwitchStreamDestination(resolvedDestinations),
+        })
+        if (result) {
+          toast.success(`Live on ${formatStreamDestinationSummary(resolvedDestinations)}`)
+        }
+      } finally {
+        setStreamingAction(null)
+        await refreshOutput()
       }
-      await syncStartStreaming(type, destinations)
-      setStreamingAction(null)
-      await refreshOutput()
     },
-    [setStreamingAction, syncStartStreaming, refreshOutput],
+    [
+      setStreamingAction,
+      syncStartStreaming,
+      refreshOutput,
+      tenantId,
+      platformConnections,
+      refreshConfiguration,
+    ],
   )
 
   const handleStopStream = useCallback(async () => {
@@ -416,6 +490,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
             recordingState,
             streamingState,
             savedDestinations,
+            platformConnections,
             onStartRecording: () => void handleStartRecording(),
             onStopRecording: () => void handleStopRecording(),
             onStartStream: (type, destinations) => void handleStartStream(type, destinations),
@@ -435,6 +510,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     recordingState,
     streamingState,
     savedDestinations,
+    platformConnections,
     handleStartRecording,
     handleStopRecording,
     handleStartStream,
