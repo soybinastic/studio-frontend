@@ -1,7 +1,11 @@
 import { useState } from 'react'
-import { Layers, Loader2, Plus } from 'lucide-react'
+import { Layers, LayoutGrid, LayoutList, Loader2, Plus } from 'lucide-react'
 import { SceneListItem } from '@/components/studio/scenes/SceneListItem'
+import { SceneCardItem } from '@/components/studio/scenes/SceneCardItem'
+import { StudioPanelShell } from '@/components/studio/layout/StudioPanelShell'
 import { Button } from '@/components/ui/button'
+import { Toggle } from '@/components/ui/toggle'
+import { useSceneViewPreference } from '@/hooks/useSceneViewPreference'
 import type { Scene } from '@/types/scenes'
 import { cn } from '@/lib/utils'
 
@@ -27,80 +31,137 @@ export function ScenesSidebar({
   onDelete,
 }: ScenesSidebarProps) {
   const [expanded, setExpanded] = useState(true)
+  const { viewMode, setViewMode } = useSceneViewPreference(isHost)
+  const isCardView = viewMode === 'card'
 
   return (
-    <aside
-      className={cn(
-        'flex shrink-0 flex-col border-r border-border/40 bg-card/50 transition-all duration-200',
-        expanded ? 'w-56' : 'w-12',
-      )}
-    >
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {expanded ? (
-          <>
-            <div className="flex items-center justify-between border-b border-border/40 px-3 py-2.5">
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Layers className="h-3.5 w-3.5" />
-                Scenes
-              </div>
-              {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-            </div>
+    <StudioPanelShell
+      side="left"
+      expanded={expanded}
+      onExpandedChange={setExpanded}
+      expandedWidth="w-60"
+      header={
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Layers className="h-4 w-4 shrink-0 text-primary" />
+            <span className="truncate text-sm font-medium">Scenes</span>
+          </div>
 
-            <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
-              {scenes.length === 0 && !isLoading ? (
-                <p className="px-1 py-4 text-center text-xs text-muted-foreground">No scenes yet</p>
-              ) : (
-                scenes.map((scene) => (
-                  <SceneListItem
-                    key={scene.scene_id}
-                    scene={scene}
-                    isHost={isHost}
-                    disabled={isMutating}
-                    onActivate={onActivate}
-                    onRename={onRename}
-                    onDelete={onDelete}
-                  />
-                ))
-              )}
-            </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
 
             {isHost && (
-              <div className="border-t border-border/40 p-2">
-                <Button
-                  type="button"
-                  variant="outline"
+              <div className="flex items-center rounded-md border border-border/60 p-0.5">
+                <Toggle
                   size="sm"
-                  className="w-full gap-1.5 text-xs"
-                  disabled={isMutating}
-                  onClick={onAddScene}
+                  pressed={viewMode === 'list'}
+                  onPressedChange={(pressed) => pressed && setViewMode('list')}
+                  className="h-7 w-7 rounded-sm px-0 data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                  aria-label="List view"
+                  title="List view"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Scene
-                </Button>
+                  <LayoutList className="h-3.5 w-3.5" />
+                </Toggle>
+                <Toggle
+                  size="sm"
+                  pressed={viewMode === 'card'}
+                  onPressedChange={(pressed) => pressed && setViewMode('card')}
+                  className="h-7 w-7 rounded-sm px-0 data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                  aria-label="Card view"
+                  title="Card view"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </Toggle>
               </div>
             )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-3">
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"
-              aria-label="Scenes"
-            >
-              <Layers className="h-4 w-4" />
-            </button>
           </div>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="border-t border-border/40 px-3 py-2 text-center text-[10px] text-muted-foreground hover:text-foreground"
-      >
-        {expanded ? 'Collapse' : 'Expand'}
-      </button>
-    </aside>
+        </div>
+      }
+      footer={
+        isHost ? (
+          <div className="p-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 w-full gap-1.5 text-xs"
+              disabled={isMutating}
+              onClick={onAddScene}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Scene
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
+      {expanded ? (
+        <div
+          className={cn(
+            'studio-panel-scroll flex-1 overflow-y-auto p-2.5',
+            isCardView ? 'space-y-1.5' : 'space-y-1',
+          )}
+        >
+          {scenes.length === 0 && !isLoading ? (
+            <p className="px-1 py-6 text-center text-xs leading-relaxed text-muted-foreground">
+              No scenes yet
+              {isHost && (
+                <>
+                  <br />
+                  <span className="text-[11px]">Add one to get started</span>
+                </>
+              )}
+            </p>
+          ) : isCardView ? (
+            scenes.map((scene) => (
+              <SceneCardItem
+                key={scene.scene_id}
+                scene={scene}
+                isHost={isHost}
+                disabled={isMutating}
+                onActivate={onActivate}
+                onRename={onRename}
+                onDelete={onDelete}
+              />
+            ))
+          ) : (
+            scenes.map((scene) => (
+              <SceneListItem
+                key={scene.scene_id}
+                scene={scene}
+                isHost={isHost}
+                disabled={isMutating}
+                onActivate={onActivate}
+                onRename={onRename}
+                onDelete={onDelete}
+              />
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-1.5 py-2">
+          {scenes.slice(0, 6).map((scene) => (
+            <button
+              key={scene.scene_id}
+              type="button"
+              onClick={() => {
+                setExpanded(true)
+                onActivate(scene.scene_id)
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-muted/80"
+              title={scene.name}
+              aria-label={scene.name}
+            >
+              <span
+                className={cn(
+                  'h-2 w-2 rounded-full',
+                  scene.is_active ? 'bg-primary ring-2 ring-primary/30' : 'bg-muted-foreground/40',
+                )}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </StudioPanelShell>
   )
 }

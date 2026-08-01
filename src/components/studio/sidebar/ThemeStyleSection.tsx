@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ThemeStylePicker, getActiveBannerTheme } from '@/components/studio/sidebar/ThemeStylePicker'
+import { GraphicsCollapsibleSection } from '@/components/studio/sidebar/GraphicsCollapsibleSection'
 import type { BannerGraphic, BannerThemeStyle } from '@/types/graphics'
 import { bannerShouldShow } from '@/lib/graphics'
 import { DEFAULT_BANNER_ACCENT } from '@/lib/bannerThemes'
@@ -23,18 +24,16 @@ export function ThemeStyleSection({
   const sectionDisabled = disabled || !bannerActive
 
   return (
-    <div className="space-y-3 rounded-lg border border-border/60 p-3">
-      <div>
-        <Label className="text-xs font-semibold uppercase tracking-wide">Theme Style</Label>
-        <p className="mt-1 text-[10px] text-muted-foreground">
-          Controls the banner lower-third shape only — not ticker, logo, or background text.
+    <GraphicsCollapsibleSection
+      title="Theme Style"
+      description="Controls the banner lower-third shape only — not ticker, logo, or background text."
+      isActive={bannerActive}
+    >
+      {!bannerActive && (
+        <p className="text-[10px] text-amber-600 dark:text-amber-400">
+          Select a banner preset first to apply a theme style.
         </p>
-        {!bannerActive && (
-          <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
-            Select a banner preset first to apply a theme style.
-          </p>
-        )}
-      </div>
+      )}
 
       <ThemeStylePicker value={theme} disabled={sectionDisabled} onChange={onThemeChange} />
 
@@ -107,6 +106,6 @@ export function ThemeStyleSection({
           Primary → title bar · Secondary → description bar · Accent → borders and accent bars
         </p>
       </div>
-    </div>
+    </GraphicsCollapsibleSection>
   )
 }

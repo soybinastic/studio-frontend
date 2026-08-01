@@ -5,6 +5,7 @@ import { GraphicsPanel } from '@/components/studio/sidebar/GraphicsPanel'
 import { SourceTileList } from '@/components/studio/sidebar/SourceTileList'
 import { SourceCard, SOURCE_TYPES } from '@/components/studio/sidebar/SourceCard'
 import { InvitePanel } from '@/components/studio/InvitePanel'
+import { StudioPanelShell } from '@/components/studio/layout/StudioPanelShell'
 import type { BackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import type { LayoutType } from '@/types/session'
 import type { SidebarTab } from '@/types/studio'
@@ -52,6 +53,40 @@ const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
   { id: 'audio', label: 'Audio', icon: Music2 },
 ]
 
+function SidebarTabs({
+  activeTab,
+  onTabChange,
+  compact = false,
+}: {
+  activeTab: SidebarTab
+  onTabChange: (tab: SidebarTab) => void
+  compact?: boolean
+}) {
+  return (
+    <div className={cn('flex rounded-lg bg-muted/50 p-0.5', compact ? 'flex-col gap-0.5' : 'w-full')}>
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onTabChange(tab.id)}
+          className={cn(
+            'flex items-center justify-center gap-1 rounded-md font-medium transition-all',
+            compact ? 'h-8 w-8' : 'flex-1 flex-col gap-0.5 px-1 py-1.5 text-[10px]',
+            activeTab === tab.id
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+          aria-label={tab.label}
+          title={tab.label}
+        >
+          <tab.icon className="h-3.5 w-3.5" />
+          {!compact && tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function StudioSidebar({
   layout,
   isHost,
@@ -74,112 +109,71 @@ export function StudioSidebar({
   const [activeTab, setActiveTab] = useState<SidebarTab>('participants')
 
   return (
-    <aside
-      className={cn(
-        'flex shrink-0 flex-col border-l border-border/40 bg-card/50 transition-all duration-200',
-        expanded ? 'w-72' : 'w-12',
-      )}
+    <StudioPanelShell
+      side="right"
+      expanded={expanded}
+      onExpandedChange={setExpanded}
+      expandedWidth="w-80"
+      header={<SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />}
     >
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {expanded ? (
-          <>
-            <div className="flex border-b border-border/40">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    'flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition-colors',
-                    activeTab === tab.id
-                      ? 'border-b-2 border-primary text-primary'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  <tab.icon className="h-3.5 w-3.5" />
-                  {tab.label}
-                </button>
+      {expanded ? (
+        <div className="studio-panel-scroll flex-1 overflow-y-auto p-3">
+          {activeTab === 'graphics' && (
+            <GraphicsPanel
+              layout={layout}
+              graphics={graphics}
+              isHost={isHost}
+              onUpdate={onGraphicUpdate}
+              onUpdateLayers={onGraphicUpdateLayers}
+              disabled={isSyncing}
+              isSaving={isSyncing}
+            />
+          )}
+
+          {activeTab === 'participants' && (
+            <div className="space-y-3">
+              {inviteUrl && (
+                <InvitePanel inviteUrl={inviteUrl} className="rounded-lg border border-border/60 bg-background/50 p-3" />
+              )}
+
+              <SourceTileList
+                sources={tileSources}
+                isHost={isHost}
+                usingSceneOverride={usingSceneOverride}
+                isSyncing={isSyncing}
+                onReorder={onReorderSources}
+                onReset={onResetTileOrder}
+                onPin={onPin}
+                onHide={onHide}
+                onMute={onMute}
+              />
+            </div>
+          )}
+
+          {activeTab === 'sources' && (
+            <div className="grid grid-cols-2 gap-2">
+              {SOURCE_TYPES.map((source) => (
+                <SourceCard key={source.id} source={source} onAdd={onAddSource} />
               ))}
             </div>
+          )}
 
-            <div className="flex-1 overflow-y-auto p-3">
-              {activeTab === 'graphics' && (
-                <GraphicsPanel
-                  layout={layout}
-                  graphics={graphics}
-                  isHost={isHost}
-                  onUpdate={onGraphicUpdate}
-                  onUpdateLayers={onGraphicUpdateLayers}
-                  disabled={isSyncing}
-                  isSaving={isSyncing}
-                />
-              )}
-
-              {activeTab === 'participants' && (
-                <div className="space-y-3">
-                  {inviteUrl && (
-                    <InvitePanel inviteUrl={inviteUrl} className="rounded-lg border border-border/60 p-3" />
-                  )}
-
-                  <SourceTileList
-                    sources={tileSources}
-                    isHost={isHost}
-                    usingSceneOverride={usingSceneOverride}
-                    isSyncing={isSyncing}
-                    onReorder={onReorderSources}
-                    onReset={onResetTileOrder}
-                    onPin={onPin}
-                    onHide={onHide}
-                    onMute={onMute}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'sources' && (
-                <div className="grid grid-cols-2 gap-2">
-                  {SOURCE_TYPES.map((source) => (
-                    <SourceCard key={source.id} source={source} onAdd={onAddSource} />
-                  ))}
-                </div>
-              )}
-
-              {activeTab === 'audio' && (
-                <BackgroundMusicPanel isHost={isHost} store={backgroundMusicStore} />
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-3">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setActiveTab(tab.id)
-                  setExpanded(true)
-                }}
-                className={cn(
-                  'flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
-                  activeTab === tab.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                aria-label={tab.label}
-              >
-                <tab.icon className="h-4 w-4" />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="border-t border-border/40 px-3 py-2 text-center text-[10px] text-muted-foreground hover:text-foreground"
-      >
-        {expanded ? 'Collapse' : 'Expand'}
-      </button>
-    </aside>
+          {activeTab === 'audio' && (
+            <BackgroundMusicPanel isHost={isHost} store={backgroundMusicStore} />
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center py-2">
+          <SidebarTabs
+            activeTab={activeTab}
+            onTabChange={(tab) => {
+              setActiveTab(tab)
+              setExpanded(true)
+            }}
+            compact
+          />
+        </div>
+      )}
+    </StudioPanelShell>
   )
 }

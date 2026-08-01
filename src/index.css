@@ -103,6 +103,24 @@
     @apply border border-border/60 bg-card/80 backdrop-blur-xl;
   }
 
+  .studio-panel-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+  }
+
+  .studio-panel-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .studio-panel-scroll::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+  }
+
+  .studio-panel-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   @keyframes marquee {
     0% { transform: translateX(100%); }
     100% { transform: translateX(-100%); }

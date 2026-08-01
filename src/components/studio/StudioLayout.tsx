@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { TopToolbar } from '@/components/studio/toolbar/TopToolbar'
 import { MediaBar } from '@/components/studio/toolbar/MediaBar'
 import { PreviewCanvas } from '@/components/studio/preview/PreviewCanvas'
 import { LayoutPicker } from '@/components/studio/layout/LayoutPicker'
@@ -61,7 +60,24 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     isHost: context.isHost,
     initialLayout: context.layout,
   })
+  const {
+    recordingState,
+    streamingState,
+    setRecordingAction,
+    setStreamingAction,
+    refresh: refreshOutput,
+  } = outputStore
   const backendSync = useBackendSync(sessionId, context.isHost)
+  const {
+    syncStartRecording,
+    syncStopRecording,
+    syncStartStreaming,
+    syncStopStreaming,
+  } = backendSync
+  const savedDestinations = useMemo(
+    () => configuration?.destinations ?? [],
+    [configuration?.destinations],
+  )
   const sceneStore = useSceneStore(sessionId, context.isHost, outputStore.setCountdownState)
   const graphicsStore = useGraphicsStore(sessionId, context.isHost, sceneStore.activeSceneId)
   const backgroundMusicStore = useBackgroundMusicStore({
@@ -200,17 +216,6 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     }
   }, [roomEnabled, connectionState, publishProducers])
 
-  const title = useMemo(
-    () => (context.isHost ? 'Host studio' : `${context.hostDisplayName}'s studio`),
-    [context],
-  )
-
-  const subtitle = useMemo(
-    () =>
-      `${tileOrder.visibleTileSources.length} source${tileOrder.visibleTileSources.length === 1 ? '' : 's'} · ${outputStore.layout}`,
-    [tileOrder.visibleTileSources.length, outputStore.layout],
-  )
-
   const handleLayoutChange = useCallback(
     async (layout: LayoutType) => {
       outputStore.setLayout(layout)
@@ -346,41 +351,41 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   )
 
   const handleStartRecording = useCallback(async () => {
-    outputStore.setRecordingAction('starting')
-    await backendSync.syncStartRecording()
-    outputStore.setRecordingAction(null)
-    await outputStore.refresh()
+    setRecordingAction('starting')
+    await syncStartRecording()
+    setRecordingAction(null)
+    await refreshOutput()
     toast.success('Recording started')
-  }, [outputStore, backendSync])
+  }, [setRecordingAction, syncStartRecording, refreshOutput])
 
   const handleStopRecording = useCallback(async () => {
-    outputStore.setRecordingAction('stopping')
-    await backendSync.syncStopRecording()
-    outputStore.setRecordingAction(null)
-    await outputStore.refresh()
+    setRecordingAction('stopping')
+    await syncStopRecording()
+    setRecordingAction(null)
+    await refreshOutput()
     toast.success('Recording stopped')
-  }, [outputStore, backendSync])
+  }, [setRecordingAction, syncStopRecording, refreshOutput])
 
   const handleStartStream = useCallback(
-    async (type: 'RTMP' | 'HLS', destinations?: Parameters<typeof backendSync.syncStartStreaming>[1]) => {
-      outputStore.setStreamingAction('starting')
+    async (type: 'RTMP' | 'HLS', destinations?: Parameters<typeof syncStartStreaming>[1]) => {
+      setStreamingAction('starting')
       if (type === 'RTMP' && destinations?.length) {
         void persistDestinationsFromStream(destinations)
       }
-      await backendSync.syncStartStreaming(type, destinations)
-      outputStore.setStreamingAction(null)
-      await outputStore.refresh()
+      await syncStartStreaming(type, destinations)
+      setStreamingAction(null)
+      await refreshOutput()
     },
-    [outputStore, backendSync],
+    [setStreamingAction, syncStartStreaming, refreshOutput],
   )
 
   const handleStopStream = useCallback(async () => {
-    outputStore.setStreamingAction('stopping')
-    await backendSync.syncStopStreaming()
-    outputStore.setStreamingAction(null)
-    await outputStore.refresh()
+    setStreamingAction('stopping')
+    await syncStopStreaming()
+    setStreamingAction(null)
+    await refreshOutput()
     toast.success('Stream stopped')
-  }, [outputStore, backendSync])
+  }, [setStreamingAction, syncStopStreaming, refreshOutput])
 
   const handleEndSession = useCallback(async () => {
     await endSession(sessionId)
@@ -403,9 +408,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       connectionError: error,
       output: showOutputControls
         ? {
-            recordingState: outputStore.recordingState,
-            streamingState: outputStore.streamingState,
-            savedDestinations: configuration?.destinations ?? [],
+            recordingState,
+            streamingState,
+            savedDestinations,
             onStartRecording: () => void handleStartRecording(),
             onStopRecording: () => void handleStopRecording(),
             onStartStream: (type, destinations) => void handleStartStream(type, destinations),
@@ -422,9 +427,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     setControls,
     connectionState,
     error,
-    outputStore.recordingState,
-    outputStore.streamingState,
-    configuration?.destinations,
+    recordingState,
+    streamingState,
+    savedDestinations,
     handleStartRecording,
     handleStopRecording,
     handleStartStream,
@@ -461,7 +466,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   }
 
   return (
-    <div className="studio-grid-bg flex min-h-[calc(100dvh-3.5rem)] flex-col">
+    <div className="studio-grid-bg flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden">
       <DeviceSetupModal
         deviceStore={deviceStore}
         open={showDeviceSetup}
@@ -489,9 +494,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         isSaving={sceneStore.isMutating}
       />
 
-      <TopToolbar title={title} subtitle={subtitle} />
-
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <ScenesSidebar
           scenes={sceneStore.scenes}
           isHost={context.isHost}
@@ -503,8 +506,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onDelete={(id) => void handleDeleteScene(id)}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-1 flex-col items-center justify-center p-4">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+          <div className="flex flex-col items-center px-4 pb-4 pt-3">
             <PreviewCanvas
               layout={outputStore.layout}
               participants={previewParticipants}
@@ -514,7 +517,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
             />
 
             {context.isHost && (
-              <div className="mt-4 w-full max-w-4xl">
+              <div className="mt-3 flex w-full max-w-4xl justify-center">
                 <LayoutPicker
                   layout={outputStore.layout}
                   onLayoutChange={(l) => void handleLayoutChange(l)}
@@ -522,17 +525,18 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 />
               </div>
             )}
-          </div>
 
-          <MediaBar
-            micEnabled={micEnabled}
-            webcamEnabled={webcamEnabled}
-            onToggleMic={() => void toggleMic()}
-            onToggleWebcam={() => void toggleWebcam()}
-            onLeave={handleLeave}
-            onDeviceSettings={() => setShowDeviceSetup(true)}
-            leaveLabel={context.isHost ? 'Leave studio' : 'Leave'}
-          />
+            <MediaBar
+              micEnabled={micEnabled}
+              webcamEnabled={webcamEnabled}
+              onToggleMic={() => void toggleMic()}
+              onToggleWebcam={() => void toggleWebcam()}
+              onLeave={handleLeave}
+              onDeviceSettings={() => setShowDeviceSetup(true)}
+              leaveLabel={context.isHost ? 'Leave studio' : 'Leave'}
+              className="mt-3"
+            />
+          </div>
         </main>
 
         <StudioSidebar

@@ -70,10 +70,10 @@ export function SourceTileList({
   return (
     <div className="space-y-3">
       {isHost && (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+          <p className="text-[10px] leading-snug text-muted-foreground">
             {usingSceneOverride ? 'Scene tile order' : 'Session default order'}
-            {canSort && ' · drag grip to reorder'}
+            {canSort && ' · drag to reorder'}
           </p>
           <Button
             type="button"

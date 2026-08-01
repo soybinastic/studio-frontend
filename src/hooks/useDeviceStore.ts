@@ -37,6 +37,7 @@ export function useDeviceStore() {
   )
   const analyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; raf: number } | null>(null)
   const previewStreamRef = useRef<MediaStream | null>(null)
+  const lastAudioLevelRef = useRef(0)
   const selectionRef = useRef(state.selection)
   selectionRef.current = state.selection
 
@@ -132,6 +133,7 @@ export function useDeviceStore() {
       void analyserRef.current.ctx.close()
       analyserRef.current = null
     }
+    lastAudioLevelRef.current = 0
     dispatch({ audioLevel: 0 })
   }, [])
 
@@ -178,7 +180,11 @@ export function useDeviceStore() {
           const tick = () => {
             analyser.getByteFrequencyData(data)
             const avg = data.reduce((a, b) => a + b, 0) / data.length
-            dispatch({ audioLevel: avg / 255 })
+            const level = avg / 255
+            if (Math.abs(level - lastAudioLevelRef.current) >= 0.02) {
+              lastAudioLevelRef.current = level
+              dispatch({ audioLevel: level })
+            }
             analyserRef.current!.raf = requestAnimationFrame(tick)
           }
           analyserRef.current = { ctx, analyser, raf: requestAnimationFrame(tick) }

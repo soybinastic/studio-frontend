@@ -1,5 +1,6 @@
 import { AlertCircle } from 'lucide-react'
-import { Label } from '@/components/ui/label'
+import { BackgroundPicker } from '@/components/studio/sidebar/BackgroundPicker'
+import { GraphicsCollapsibleSection } from '@/components/studio/sidebar/GraphicsCollapsibleSection'
 import {
   Select,
   SelectContent,
@@ -7,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { BackgroundPicker } from '@/components/studio/sidebar/BackgroundPicker'
 import type { BackgroundPreset } from '@/lib/backgroundPresets'
 import type { LayoutType } from '@/types/session'
 import type { GraphicsState } from '@/types/graphics'
@@ -36,12 +36,11 @@ export function BackgroundSection({
   const backgroundSupported = layoutSupportsBackground(layout)
 
   return (
-    <div className="space-y-2 rounded-lg border border-border/60 p-3">
-      <Label className="text-xs font-semibold uppercase tracking-wide">Background</Label>
-      <p className="text-[10px] text-muted-foreground">
-        Click a thumbnail to apply. Visible on Contain and Fullscreen layouts.
-      </p>
-
+    <GraphicsCollapsibleSection
+      title="Background"
+      description="Click a thumbnail to apply. Visible on Contain and Fullscreen layouts."
+      isActive={isActive}
+    >
       {isActive && !backgroundSupported && (
         <p className="flex items-start gap-1 text-[10px] text-amber-600 dark:text-amber-400">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
@@ -72,6 +71,6 @@ export function BackgroundSection({
           </SelectContent>
         </Select>
       )}
-    </div>
+    </GraphicsCollapsibleSection>
   )
 }

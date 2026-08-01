@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Eye, Layers, Timer, Trash2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 
 interface SceneListItemProps {
   scene: Scene
@@ -48,12 +49,16 @@ export function SceneListItem({
   return (
     <div
       className={cn(
-        'group flex items-center gap-1 rounded-lg border px-2 py-1.5 transition-colors',
+        'group relative flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors',
         scene.is_active
-          ? 'border-primary/50 bg-primary/5'
-          : 'border-border/40 bg-background/40 hover:border-border/70',
+          ? 'bg-primary/10 ring-1 ring-primary/20'
+          : 'bg-background/60 hover:bg-muted/60',
       )}
     >
+      {scene.is_active && (
+        <span className="absolute bottom-1.5 left-0 top-1.5 w-0.5 rounded-full bg-primary" />
+      )}
+
       {isCountdown ? (
         <Timer className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       ) : (
@@ -90,7 +95,7 @@ export function SceneListItem({
       )}
 
       {isHost && (
-        <div className="flex shrink-0 items-center gap-0.5 opacity-70 group-hover:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           <Button
             type="button"
             variant="ghost"
@@ -122,7 +127,9 @@ export function SceneListItem({
       )}
 
       {!isHost && scene.is_active && (
-        <span className="text-[10px] font-medium text-primary">Live</span>
+        <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[9px] font-medium text-primary">
+          Live
+        </Badge>
       )}
     </div>
   )
