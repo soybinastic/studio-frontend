@@ -10,7 +10,6 @@ export interface UseRoomOptions {
   mediasoupWsUrl: string
   enabled?: boolean
   autoPublish?: boolean
-  deviceSelection?: DeviceSelection | null
 }
 
 export function useRoom({
@@ -20,7 +19,6 @@ export function useRoom({
   mediasoupWsUrl,
   enabled = true,
   autoPublish = false,
-  deviceSelection,
 }: UseRoomOptions) {
   const clientRef = useRef<RoomClient | null>(null)
   const connectionStateRef = useRef<ConnectionState>('idle')
@@ -50,18 +48,11 @@ export function useRoom({
     setIsPublished(true)
   }, [])
 
-  const switchDevices = useCallback(
-    async (selection: DeviceSelection) => {
-      const client = clientRef.current
-      if (!client) return
-
-      await client.replaceDevices({
-        cameraId: selection.cameraId,
-        microphoneId: selection.microphoneId,
-      })
-    },
-    [],
-  )
+  const switchDevices = useCallback(async (selection: DeviceSelection): Promise<DeviceSelection | null> => {
+    const client = clientRef.current
+    if (!client) return null
+    return client.replaceDevices(selection)
+  }, [])
 
   useEffect(() => {
     if (!enabled || !roomId || !peerId || !displayName || !mediasoupWsUrl) {
@@ -75,9 +66,6 @@ export function useRoom({
       displayName,
       mediasoupWsUrl,
       autoPublish,
-      deviceConstraints: deviceSelection
-        ? { cameraId: deviceSelection.cameraId, microphoneId: deviceSelection.microphoneId }
-        : undefined,
       onStateChange: (state) => {
         if (!cancelled) {
           connectionStateRef.current = state
@@ -115,8 +103,9 @@ export function useRoom({
       window.removeEventListener('beforeunload', onBeforeUnload)
       client.close()
       clientRef.current = null
+      setIsPublished(false)
     }
-  }, [enabled, roomId, peerId, displayName, mediasoupWsUrl, autoPublish, deviceSelection])
+  }, [enabled, roomId, peerId, displayName, mediasoupWsUrl, autoPublish])
 
   const localParticipant = participants.find((p) => p.isLocal)
   const micEnabled = localParticipant?.audioEnabled ?? false

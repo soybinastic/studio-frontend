@@ -129,8 +129,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           outputStore,
           graphicsStore,
           backgroundMusicStore,
-          deviceStore,
-          tenantDevices: config.devices,
+          applyDevicePreferences: false,
         })
         await graphicsStore.refresh({ force: true })
       } catch (err) {
@@ -166,8 +165,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     mediasoupWsUrl: context.mediasoupWsUrl,
     enabled: roomEnabled,
     autoPublish: false,
-    deviceSelection: deviceStore.isSetupComplete ? deviceStore.selection : null,
   })
+
+  const publishedRef = useRef(false)
 
   const hostPeerId = useMemo(() => {
     if (context.isHost) return context.peerId
@@ -200,10 +200,10 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   )
 
   useEffect(() => {
-    if (deviceStore.isSetupComplete && !showDeviceSetup) {
-      void deviceStore.startPreview()
+    if (error) {
+      toast.error(error)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [error])
 
   const handleDeviceConfirm = useCallback(async () => {
     const selection = { ...deviceStore.selection }
@@ -219,19 +219,26 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
 
   const applyLiveDevices = useCallback(
     async (devices: DeviceSelection) => {
-      deviceStore.setSelection(devices)
-      if (devices.cameraId || devices.microphoneId) {
-        await switchDevices(devices)
+      if (!hasSceneDevices(devices)) return
+      const resolved = await switchDevices(devices)
+      if (resolved) {
+        deviceStore.setSelection(resolved)
       }
     },
     [deviceStore, switchDevices],
   )
 
   useEffect(() => {
-    if (roomEnabled && connectionState === 'connected') {
-      void publishProducers()
-    }
-  }, [roomEnabled, connectionState, publishProducers])
+    if (!roomEnabled || connectionState !== 'connected' || publishedRef.current) return
+    publishedRef.current = true
+    void (async () => {
+      const resolved = await switchDevices(deviceStore.selection)
+      if (resolved) {
+        deviceStore.setSelection(resolved)
+      }
+      await publishProducers()
+    })()
+  }, [roomEnabled, connectionState, publishProducers, switchDevices, deviceStore])
 
   const handleLayoutChange = useCallback(
     async (layout: LayoutType) => {

@@ -11,8 +11,10 @@ import {
 } from '@/components/ui/select'
 import { AudioMeter } from '@/components/studio/device-setup/AudioMeter'
 import { CameraPreview } from '@/components/studio/device-setup/CameraPreview'
-import type { DeviceSelection, MediaDeviceInfo } from '@/types/devices'
 import { enumerateMediaDevices, pickDefaultSelection } from '@/lib/devices'
+import { mediaErrorMessage, openAvPreviewStream, stopMediaStream } from '@/lib/openMediaStream'
+import { resolveSelectionDevices, selectionFromMediaDevice } from '@/lib/resolveDevice'
+import { EMPTY_DEVICE_SELECTION, type DeviceSelection, type MediaDeviceInfo } from '@/types/devices'
 
 interface SceneDevicePickerModalProps {
   open: boolean
@@ -20,15 +22,9 @@ interface SceneDevicePickerModalProps {
   onCancel: () => void
 }
 
-const EMPTY_SELECTION: DeviceSelection = {
-  cameraId: null,
-  microphoneId: null,
-  speakerId: null,
-}
-
 export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevicePickerModalProps) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-  const [selection, setSelection] = useState<DeviceSelection>(EMPTY_SELECTION)
+  const [selection, setSelection] = useState<DeviceSelection>({ ...EMPTY_DEVICE_SELECTION })
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null)
   const [audioLevel, setAudioLevel] = useState(0)
   const [isEnumerating, setIsEnumerating] = useState(false)
@@ -38,10 +34,8 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
   const analyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; raf: number } | null>(null)
 
   const stopPreview = useCallback(() => {
-    if (previewStreamRef.current) {
-      previewStreamRef.current.getTracks().forEach((t) => t.stop())
-      previewStreamRef.current = null
-    }
+    stopMediaStream(previewStreamRef.current)
+    previewStreamRef.current = null
     setPreviewStream(null)
     if (analyserRef.current) {
       cancelAnimationFrame(analyserRef.current.raf)
@@ -52,34 +46,23 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
   }, [])
 
   const startPreview = useCallback(
-    async (nextSelection: DeviceSelection) => {
+    async (nextSelection: DeviceSelection, deviceList?: MediaDeviceInfo[]) => {
       stopPreview()
 
-      const constraints: MediaStreamConstraints = {}
-      if (nextSelection.cameraId) {
-        constraints.video = {
-          deviceId: { exact: nextSelection.cameraId },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-        }
-      }
-      if (nextSelection.microphoneId) {
-        constraints.audio = {
-          deviceId: { exact: nextSelection.microphoneId },
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
-      }
-
-      if (!constraints.video && !constraints.audio) return
+      const list = deviceList ?? devices
+      const resolved = resolveSelectionDevices(list, nextSelection)
+      if (!resolved.cameraId && !resolved.microphoneId) return
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints)
+        const stream = await openAvPreviewStream({
+          cameraId: resolved.cameraId,
+          microphoneId: resolved.microphoneId,
+        })
         previewStreamRef.current = stream
         setPreviewStream(stream)
+        setSelection(resolved)
 
-        if (nextSelection.microphoneId && stream.getAudioTracks().length > 0) {
+        if (resolved.microphoneId && stream.getAudioTracks().length > 0) {
           const ctx = new AudioContext()
           const source = ctx.createMediaStreamSource(stream)
           const analyser = ctx.createAnalyser()
@@ -95,11 +78,11 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
           }
           analyserRef.current = { ctx, analyser, raf: requestAnimationFrame(tick) }
         }
-      } catch {
-        setPermissionError('Could not start preview with selected devices.')
+      } catch (err) {
+        setPermissionError(mediaErrorMessage(err, 'Could not start preview with selected devices.'))
       }
     },
-    [stopPreview],
+    [devices, stopPreview],
   )
 
   useEffect(() => {
@@ -123,10 +106,10 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
         const list = await enumerateMediaDevices()
         if (cancelled) return
 
-        const defaults = pickDefaultSelection(list, EMPTY_SELECTION)
+        const defaults = pickDefaultSelection(list, { ...EMPTY_DEVICE_SELECTION })
         setDevices(list)
         setSelection(defaults)
-        await startPreview(defaults)
+        await startPreview(defaults, list)
       } catch {
         if (!cancelled) {
           setPermissionError('Camera and microphone access is required to pick scene devices.')
@@ -147,14 +130,16 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
   const speakers = devices.filter((d) => d.kind === 'audiooutput')
 
   const handleCameraChange = (cameraId: string) => {
-    const next = { ...selection, cameraId }
-    setSelection(next)
+    const device = cameras.find((d) => d.deviceId === cameraId)
+    if (!device) return
+    const next = { ...selection, ...selectionFromMediaDevice(device, 'camera') }
     void startPreview(next)
   }
 
   const handleMicChange = (microphoneId: string) => {
-    const next = { ...selection, microphoneId }
-    setSelection(next)
+    const device = microphones.find((d) => d.deviceId === microphoneId)
+    if (!device) return
+    const next = { ...selection, ...selectionFromMediaDevice(device, 'microphone') }
     void startPreview(next)
   }
 

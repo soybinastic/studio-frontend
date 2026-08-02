@@ -25,7 +25,6 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     microphones,
     speakers,
     selection,
-    setSelection,
     previewStream,
     startPreview,
     audioLevel,
@@ -35,20 +34,23 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     setCameraEnabled,
     testSpeaker,
     isEnumerating,
+    selectCamera,
+    selectMicrophone,
+    selectSpeaker,
   } = deviceStore
 
   const handleCameraChange = (cameraId: string) => {
-    setSelection({ cameraId })
+    selectCamera(cameraId)
     void startPreview({ cameraId, microphoneId: selection.microphoneId ?? undefined })
   }
 
   const handleMicChange = (microphoneId: string) => {
-    setSelection({ microphoneId })
+    selectMicrophone(microphoneId)
     void startPreview({ cameraId: selection.cameraId ?? undefined, microphoneId })
   }
 
   const handleSpeakerChange = (speakerId: string) => {
-    setSelection({ speakerId })
+    selectSpeaker(speakerId)
   }
 
   const handleConfirm = () => {
@@ -60,9 +62,9 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     if (!open) return
 
     void (async () => {
-      const selection = await deviceStore.initializeDevices()
-      if (selection) {
-        await deviceStore.startPreview(selection)
+      const nextSelection = await deviceStore.initializeDevices()
+      if (nextSelection) {
+        await deviceStore.startPreview(nextSelection)
       }
     })()
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps

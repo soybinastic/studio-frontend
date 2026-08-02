@@ -15,6 +15,7 @@ import {
   persistSceneDelete,
   persistSceneUpdate,
 } from '@/lib/persistenceSync'
+import { normalizeDeviceSelection } from '@/lib/devices'
 import type { DeviceSelection } from '@/types/devices'
 import type { Scene, SceneActivateResponse } from '@/types/scenes'
 import type { CountdownState } from '@/types/session'
@@ -24,7 +25,9 @@ const SCENES_POLL_MS = 3000
 function toSceneDevicesPayload(devices: DeviceSelection) {
   return {
     cameraId: devices.cameraId,
+    cameraLabel: devices.cameraLabel,
     microphoneId: devices.microphoneId,
+    microphoneLabel: devices.microphoneLabel,
     speakerId: devices.speakerId,
   }
 }
@@ -46,10 +49,14 @@ export function useSceneStore(
     setIsLoading(true)
     try {
       const list = await listScenes(sessionId)
-      setScenes(list)
-      const active = list.find((s) => s.is_active)
+      const normalized = list.map((scene) => ({
+        ...scene,
+        devices: normalizeDeviceSelection(scene.devices),
+      }))
+      setScenes(normalized)
+      const active = normalized.find((s) => s.is_active)
       setActiveSceneId(active?.scene_id ?? null)
-      return list
+      return normalized
     } catch (err) {
       if (err instanceof ApiError && isHost) toast.error(err.message)
       return []

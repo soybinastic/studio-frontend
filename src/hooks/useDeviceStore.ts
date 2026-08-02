@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
-import type { DeviceSelection, DeviceState, MediaDeviceInfo } from '@/types/devices'
+import {
+  EMPTY_DEVICE_SELECTION,
+  type DeviceSelection,
+  type DeviceState,
+  type MediaDeviceInfo,
+} from '@/types/devices'
+import { mapMediaDevices } from '@/lib/devices'
+import { resolveSelectionDevices, selectionFromMediaDevice } from '@/lib/resolveDevice'
+import { mediaErrorMessage, openAvPreviewStream, stopMediaStream } from '@/lib/openMediaStream'
 
 const initialState: DeviceState = {
   devices: [],
-  selection: { cameraId: null, microphoneId: null, speakerId: null },
+  selection: { ...EMPTY_DEVICE_SELECTION },
   isEnumerating: false,
   isSetupComplete: false,
   micMuted: false,
@@ -14,16 +22,6 @@ const initialState: DeviceState = {
 
 function deviceReducer(state: DeviceState, action: Partial<DeviceState>): DeviceState {
   return { ...state, ...action }
-}
-
-function mapDevices(raw: MediaDeviceInfo[]): MediaDeviceInfo[] {
-  return raw
-    .filter((d) => d.deviceId !== '')
-    .map((d) => ({
-      deviceId: d.deviceId,
-      label: d.label || `${d.kind.replace('input', '').replace('output', '')} (${d.deviceId.slice(0, 8)})`,
-      kind: d.kind,
-    }))
 }
 
 export function useDeviceStore() {
@@ -43,34 +41,18 @@ export function useDeviceStore() {
 
   const enumerateDevices = useCallback(async (): Promise<MediaDeviceInfo[]> => {
     const raw = await navigator.mediaDevices.enumerateDevices()
-    const devices = mapDevices(
+    return mapMediaDevices(
       raw.map((d) => ({
         deviceId: d.deviceId,
         label: d.label,
         kind: d.kind as MediaDeviceInfo['kind'],
+        groupId: d.groupId,
       })),
     )
-    return devices
   }, [])
 
   const applyDeviceList = useCallback((devices: MediaDeviceInfo[], prevSelection?: DeviceSelection): DeviceSelection => {
-    const sel = prevSelection ?? selectionRef.current
-    const cameras = devices.filter((d) => d.kind === 'videoinput')
-    const mics = devices.filter((d) => d.kind === 'audioinput')
-    const speakers = devices.filter((d) => d.kind === 'audiooutput')
-
-    const selection: DeviceSelection = {
-      cameraId: sel.cameraId && cameras.some((d) => d.deviceId === sel.cameraId)
-        ? sel.cameraId
-        : cameras[0]?.deviceId ?? null,
-      microphoneId: sel.microphoneId && mics.some((d) => d.deviceId === sel.microphoneId)
-        ? sel.microphoneId
-        : mics[0]?.deviceId ?? null,
-      speakerId: sel.speakerId && speakers.some((d) => d.deviceId === sel.speakerId)
-        ? sel.speakerId
-        : speakers[0]?.deviceId ?? null,
-    }
-
+    const selection = resolveSelectionDevices(devices, prevSelection ?? selectionRef.current)
     selectionRef.current = selection
     dispatch({ devices, selection })
     return selection
@@ -120,10 +102,8 @@ export function useDeviceStore() {
   }, [enumerateDevices, applyDeviceList])
 
   const stopPreview = useCallback(() => {
-    if (previewStreamRef.current) {
-      previewStreamRef.current.getTracks().forEach((t) => t.stop())
-      previewStreamRef.current = null
-    }
+    stopMediaStream(previewStreamRef.current)
+    previewStreamRef.current = null
     dispatch({ previewStream: null })
   }, [])
 
@@ -142,34 +122,21 @@ export function useDeviceStore() {
       stopPreview()
       stopAudioMeter()
 
-      const cameraId = selection?.cameraId ?? selectionRef.current.cameraId
-      const microphoneId = selection?.microphoneId ?? selectionRef.current.microphoneId
+      const merged = { ...selectionRef.current, ...selection }
+      const devices = state.devices.length > 0 ? state.devices : await enumerateDevices()
+      const resolved = resolveSelectionDevices(devices, merged)
 
-      const constraints: MediaStreamConstraints = {}
-      if (cameraId) {
-        constraints.video = {
-          deviceId: { exact: cameraId },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-        }
-      }
-      if (microphoneId) {
-        constraints.audio = {
-          deviceId: { exact: microphoneId },
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
-      }
-
-      if (!constraints.video && !constraints.audio) return
+      if (!resolved.cameraId && !resolved.microphoneId) return
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints)
+        const stream = await openAvPreviewStream({
+          cameraId: resolved.cameraId,
+          microphoneId: resolved.microphoneId,
+        })
         previewStreamRef.current = stream
-        dispatch({ previewStream: stream })
+        dispatch({ previewStream: stream, selection: resolved })
 
-        if (microphoneId && stream.getAudioTracks().length > 0) {
+        if (resolved.microphoneId && stream.getAudioTracks().length > 0) {
           const ctx = new AudioContext()
           const source = ctx.createMediaStreamSource(stream)
           const analyser = ctx.createAnalyser()
@@ -190,19 +157,42 @@ export function useDeviceStore() {
           analyserRef.current = { ctx, analyser, raf: requestAnimationFrame(tick) }
         }
       } catch (err) {
-        const msg =
-          err instanceof DOMException && err.name === 'NotAllowedError'
-            ? 'Could not start preview — permission denied.'
-            : 'Could not start preview with selected devices.'
-        setPermissionError(msg)
+        setPermissionError(mediaErrorMessage(err, 'Could not start preview with selected devices.'))
       }
     },
-    [stopPreview, stopAudioMeter],
+    [stopPreview, stopAudioMeter, state.devices, enumerateDevices],
   )
 
   const setSelection = useCallback((selection: Partial<DeviceSelection>) => {
-    dispatch({ selection: { ...selectionRef.current, ...selection } })
+    const next = { ...selectionRef.current, ...selection }
+    selectionRef.current = next
+    dispatch({ selection: next })
   }, [])
+
+  const selectCamera = useCallback(
+    (deviceId: string) => {
+      const device = state.devices.find((d) => d.deviceId === deviceId && d.kind === 'videoinput')
+      if (!device) return
+      setSelection(selectionFromMediaDevice(device, 'camera'))
+    },
+    [state.devices, setSelection],
+  )
+
+  const selectMicrophone = useCallback(
+    (deviceId: string) => {
+      const device = state.devices.find((d) => d.deviceId === deviceId && d.kind === 'audioinput')
+      if (!device) return
+      setSelection(selectionFromMediaDevice(device, 'microphone'))
+    },
+    [state.devices, setSelection],
+  )
+
+  const selectSpeaker = useCallback(
+    (deviceId: string) => {
+      setSelection({ speakerId: deviceId })
+    },
+    [setSelection],
+  )
 
   const testSpeaker = useCallback(async () => {
     const ctx = new AudioContext()
@@ -250,6 +240,9 @@ export function useDeviceStore() {
     initializeDevices,
     refreshDevices,
     setSelection,
+    selectCamera,
+    selectMicrophone,
+    selectSpeaker,
     startPreview,
     stopPreview,
     testSpeaker,
