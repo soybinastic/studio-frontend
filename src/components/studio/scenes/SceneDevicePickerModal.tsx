@@ -32,6 +32,8 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
 
   const previewStreamRef = useRef<MediaStream | null>(null)
   const analyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; raf: number } | null>(null)
+  const devicesRef = useRef<MediaDeviceInfo[]>([])
+  devicesRef.current = devices
 
   const stopPreview = useCallback(() => {
     stopMediaStream(previewStreamRef.current)
@@ -49,7 +51,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
     async (nextSelection: DeviceSelection, deviceList?: MediaDeviceInfo[]) => {
       stopPreview()
 
-      const list = deviceList ?? devices
+      const list = deviceList ?? devicesRef.current
       const resolved = resolveSelectionDevices(list, nextSelection)
       if (!resolved.cameraId && !resolved.microphoneId) return
 
@@ -82,7 +84,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
         setPermissionError(mediaErrorMessage(err, 'Could not start preview with selected devices.'))
       }
     },
-    [devices, stopPreview],
+    [stopPreview],
   )
 
   useEffect(() => {
@@ -109,13 +111,13 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
         const defaults = pickDefaultSelection(list, { ...EMPTY_DEVICE_SELECTION })
         setDevices(list)
         setSelection(defaults)
-        await startPreview(defaults, list)
+        setIsEnumerating(false)
+        void startPreview(defaults, list)
       } catch {
         if (!cancelled) {
           setPermissionError('Camera and microphone access is required to pick scene devices.')
+          setIsEnumerating(false)
         }
-      } finally {
-        if (!cancelled) setIsEnumerating(false)
       }
     })()
 
