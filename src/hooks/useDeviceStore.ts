@@ -35,6 +35,7 @@ export function useDeviceStore() {
   )
   const analyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; raf: number } | null>(null)
   const previewStreamRef = useRef<MediaStream | null>(null)
+  const previewGenerationRef = useRef(0)
   const lastAudioLevelRef = useRef(0)
   const selectionRef = useRef(state.selection)
   selectionRef.current = state.selection
@@ -119,12 +120,18 @@ export function useDeviceStore() {
 
   const startPreview = useCallback(
     async (selection?: Partial<DeviceSelection>) => {
+      const generation = ++previewGenerationRef.current
       stopPreview()
       stopAudioMeter()
+      setPermissionError(null)
 
       const merged = { ...selectionRef.current, ...selection }
       const devices = state.devices.length > 0 ? state.devices : await enumerateDevices()
+      if (generation !== previewGenerationRef.current) return
+
       const resolved = resolveSelectionDevices(devices, merged)
+      selectionRef.current = resolved
+      dispatch({ selection: resolved })
 
       if (!resolved.cameraId && !resolved.microphoneId) return
 
@@ -133,8 +140,13 @@ export function useDeviceStore() {
           cameraId: resolved.cameraId,
           microphoneId: resolved.microphoneId,
         })
+        if (generation !== previewGenerationRef.current) {
+          stopMediaStream(stream)
+          return
+        }
+
         previewStreamRef.current = stream
-        dispatch({ previewStream: stream, selection: resolved })
+        dispatch({ previewStream: stream })
 
         if (resolved.microphoneId && stream.getAudioTracks().length > 0) {
           const ctx = new AudioContext()
@@ -145,6 +157,7 @@ export function useDeviceStore() {
 
           const data = new Uint8Array(analyser.frequencyBinCount)
           const tick = () => {
+            if (generation !== previewGenerationRef.current) return
             analyser.getByteFrequencyData(data)
             const avg = data.reduce((a, b) => a + b, 0) / data.length
             const level = avg / 255
@@ -157,6 +170,7 @@ export function useDeviceStore() {
           analyserRef.current = { ctx, analyser, raf: requestAnimationFrame(tick) }
         }
       } catch (err) {
+        if (generation !== previewGenerationRef.current) return
         setPermissionError(mediaErrorMessage(err, 'Could not start preview with selected devices.'))
       }
     },

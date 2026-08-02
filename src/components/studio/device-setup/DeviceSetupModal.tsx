@@ -12,6 +12,7 @@ import {
 import { AudioMeter } from '@/components/studio/device-setup/AudioMeter'
 import { CameraPreview } from '@/components/studio/device-setup/CameraPreview'
 import type { DeviceStore } from '@/hooks/useDeviceStore'
+import { selectionFromMediaDevice } from '@/lib/resolveDevice'
 
 interface DeviceSetupModalProps {
   deviceStore: DeviceStore
@@ -34,19 +35,19 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     setCameraEnabled,
     testSpeaker,
     isEnumerating,
-    selectCamera,
-    selectMicrophone,
     selectSpeaker,
   } = deviceStore
 
   const handleCameraChange = (cameraId: string) => {
-    selectCamera(cameraId)
-    void startPreview({ cameraId, microphoneId: selection.microphoneId ?? undefined })
+    const device = cameras.find((d) => d.deviceId === cameraId)
+    if (!device) return
+    void startPreview(selectionFromMediaDevice(device, 'camera'))
   }
 
   const handleMicChange = (microphoneId: string) => {
-    selectMicrophone(microphoneId)
-    void startPreview({ cameraId: selection.cameraId ?? undefined, microphoneId })
+    const device = microphones.find((d) => d.deviceId === microphoneId)
+    if (!device) return
+    void startPreview(selectionFromMediaDevice(device, 'microphone'))
   }
 
   const handleSpeakerChange = (speakerId: string) => {
@@ -64,7 +65,7 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     void (async () => {
       const nextSelection = await deviceStore.initializeDevices()
       if (nextSelection) {
-        await deviceStore.startPreview(nextSelection)
+        void deviceStore.startPreview(nextSelection)
       }
     })()
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps

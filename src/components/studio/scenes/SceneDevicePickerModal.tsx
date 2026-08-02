@@ -32,6 +32,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
 
   const previewStreamRef = useRef<MediaStream | null>(null)
   const analyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; raf: number } | null>(null)
+  const previewGenerationRef = useRef(0)
   const devicesRef = useRef<MediaDeviceInfo[]>([])
   devicesRef.current = devices
 
@@ -49,10 +50,14 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
 
   const startPreview = useCallback(
     async (nextSelection: DeviceSelection, deviceList?: MediaDeviceInfo[]) => {
+      const generation = ++previewGenerationRef.current
       stopPreview()
+      setPermissionError(null)
 
       const list = deviceList ?? devicesRef.current
       const resolved = resolveSelectionDevices(list, nextSelection)
+      setSelection(resolved)
+
       if (!resolved.cameraId && !resolved.microphoneId) return
 
       try {
@@ -60,9 +65,13 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
           cameraId: resolved.cameraId,
           microphoneId: resolved.microphoneId,
         })
+        if (generation !== previewGenerationRef.current) {
+          stopMediaStream(stream)
+          return
+        }
+
         previewStreamRef.current = stream
         setPreviewStream(stream)
-        setSelection(resolved)
 
         if (resolved.microphoneId && stream.getAudioTracks().length > 0) {
           const ctx = new AudioContext()
@@ -73,6 +82,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
 
           const data = new Uint8Array(analyser.frequencyBinCount)
           const tick = () => {
+            if (generation !== previewGenerationRef.current) return
             analyser.getByteFrequencyData(data)
             const avg = data.reduce((a, b) => a + b, 0) / data.length
             setAudioLevel(avg / 255)
@@ -81,6 +91,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
           analyserRef.current = { ctx, analyser, raf: requestAnimationFrame(tick) }
         }
       } catch (err) {
+        if (generation !== previewGenerationRef.current) return
         setPermissionError(mediaErrorMessage(err, 'Could not start preview with selected devices.'))
       }
     },
@@ -135,6 +146,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
     const device = cameras.find((d) => d.deviceId === cameraId)
     if (!device) return
     const next = { ...selection, ...selectionFromMediaDevice(device, 'camera') }
+    setSelection(next)
     void startPreview(next)
   }
 
@@ -142,6 +154,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
     const device = microphones.find((d) => d.deviceId === microphoneId)
     if (!device) return
     const next = { ...selection, ...selectionFromMediaDevice(device, 'microphone') }
+    setSelection(next)
     void startPreview(next)
   }
 
