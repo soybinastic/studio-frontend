@@ -7,10 +7,16 @@ import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { useDestinationOutputs } from '@/context/DestinationOutputsProvider'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { isEmbeddedIntegration } from '@/lib/integration/integrationMode'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { controls } = useStudioHeaderControls()
   const { openDestinations } = useDestinationOutputs()
+  const isEmbedded = isEmbeddedIntegration()
+
+  if (isEmbedded) {
+    return <div className="min-h-dvh overflow-x-hidden bg-background">{children}</div>
+  }
 
   return (
     <div className="min-h-dvh overflow-x-hidden bg-background">
