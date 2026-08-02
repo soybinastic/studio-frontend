@@ -138,7 +138,9 @@ export function useDeviceStore() {
       try {
         const stream = await openAvPreviewStream({
           cameraId: resolved.cameraId,
+          cameraLabel: resolved.cameraLabel,
           microphoneId: resolved.microphoneId,
+          microphoneLabel: resolved.microphoneLabel,
         })
         if (generation !== previewGenerationRef.current) {
           stopMediaStream(stream)

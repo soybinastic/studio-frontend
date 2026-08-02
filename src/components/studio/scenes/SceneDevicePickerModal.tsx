@@ -63,7 +63,9 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
       try {
         const stream = await openAvPreviewStream({
           cameraId: resolved.cameraId,
+          cameraLabel: resolved.cameraLabel,
           microphoneId: resolved.microphoneId,
+          microphoneLabel: resolved.microphoneLabel,
         })
         if (generation !== previewGenerationRef.current) {
           stopMediaStream(stream)

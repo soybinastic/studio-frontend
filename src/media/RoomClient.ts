@@ -165,7 +165,9 @@ export class RoomClient {
       throw new Error(deviceUnavailableMessage(resolved.selection, 'microphone'))
     }
 
-    const stream = await openAudioStream(microphone.deviceId, 'producer')
+    const stream = await openAudioStream(microphone.deviceId, 'producer', {
+      label: microphone.label,
+    })
     this.micStream = stream
     const track = stream.getAudioTracks()[0]
 
@@ -212,7 +214,9 @@ export class RoomClient {
       throw new Error(deviceUnavailableMessage(resolved.selection, 'camera'))
     }
 
-    const stream = await openVideoStream(camera.deviceId, 'producer')
+    const stream = await openVideoStream(camera.deviceId, 'producer', {
+      label: camera.label,
+    })
     this.webcamStream = stream
     const track = stream.getVideoTracks()[0]
 
