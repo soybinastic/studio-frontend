@@ -3,6 +3,7 @@ import { Toaster } from 'sonner'
 import { AppShell } from '@/components/layout/AppShell'
 import { ThemeProvider } from '@/components/theme-provider'
 import { StudioHeaderControlsProvider } from '@/context/StudioHeaderControlsProvider'
+import { AppCmsEmbedBridge } from '@/context/AppCmsEmbedBridge'
 import { DestinationOutputsProvider } from '@/context/DestinationOutputsProvider'
 import { TenantProvider } from '@/context/TenantProvider'
 import { HomePage } from '@/pages/HomePage'
@@ -16,18 +17,20 @@ export default function App() {
       <TenantProvider>
         <StudioHeaderControlsProvider>
           <BrowserRouter>
-            <DestinationOutputsProvider>
-              <AppShell>
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/join/:sessionId" element={<JoinPage />} />
-                  <Route path="/studio/:sessionId" element={<StudioPage />} />
-                  <Route path="/oauth/twitch/complete" element={<TwitchOAuthCompletePage />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </AppShell>
-              <Toaster richColors position="top-center" closeButton />
-            </DestinationOutputsProvider>
+            <AppCmsEmbedBridge>
+              <DestinationOutputsProvider>
+                <AppShell>
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/join/:sessionId" element={<JoinPage />} />
+                    <Route path="/studio/:sessionId" element={<StudioPage />} />
+                    <Route path="/oauth/twitch/complete" element={<TwitchOAuthCompletePage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </AppShell>
+                <Toaster richColors position="top-center" closeButton />
+              </DestinationOutputsProvider>
+            </AppCmsEmbedBridge>
           </BrowserRouter>
         </StudioHeaderControlsProvider>
       </TenantProvider>

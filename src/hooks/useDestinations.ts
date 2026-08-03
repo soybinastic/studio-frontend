@@ -16,6 +16,7 @@ import { ApiError } from '@/api/client'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useTenant } from '@/context/TenantProvider'
 import type { EmbedPlatform } from '@/lib/integration/cmsEmbedProtocol'
+import { isEmbeddedIntegration } from '@/lib/integration/integrationMode'
 import { mapEmbedPayloadToImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
@@ -86,7 +87,8 @@ export interface UseDestinationsOptions {
 
 export function useDestinations(options?: UseDestinationsOptions) {
   const { tenantId, configuration, refreshConfiguration } = useTenant()
-  const { isEmbedded, requestPlatformConnect } = useCmsEmbedBridge()
+  const { requestPlatformConnect } = useCmsEmbedBridge()
+  const isEmbedded = isEmbeddedIntegration()
   const persistenceEnabled = isPersistenceEnabled()
 
   const syncedDestinations = useMemo(
