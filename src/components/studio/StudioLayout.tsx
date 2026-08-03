@@ -12,6 +12,7 @@ import { AddSceneModal } from '@/components/studio/scenes/AddSceneModal'
 import { CountdownConfigModal } from '@/components/studio/scenes/CountdownConfigModal'
 import { SceneDevicePickerModal } from '@/components/studio/scenes/SceneDevicePickerModal'
 import { DeviceSetupModal } from '@/components/studio/device-setup/DeviceSetupModal'
+import { YouTubeGoLiveErrorDialog } from '@/components/studio/YouTubeGoLiveErrorDialog'
 import { useDeviceStore } from '@/hooks/useDeviceStore'
 import { hasSceneDevices } from '@/lib/devices'
 import { countdownSecondsRemaining } from '@/lib/countdown'
@@ -24,9 +25,11 @@ import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
 import { useIsDrawerMode } from '@/hooks/useBreakpoint'
 import { useTenant } from '@/context/TenantProvider'
+import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
 import { applyActiveScenePreviewState } from '@/lib/applyActiveScenePreview'
+import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
   ensureAllScenesLinked,
   getLocalTenantConfiguration,
@@ -34,6 +37,23 @@ import {
   persistLayout,
   setPersistenceSessionId,
 } from '@/lib/persistenceSync'
+import {
+  formatStreamDestinationSummary,
+  getStreamableDestinations,
+  hasTwitchStreamDestination,
+  refreshFacebookStreamKeys,
+  refreshTwitchStreamKeys,
+  refreshYouTubeStreamKeys,
+  toStreamDestinationInputs,
+  willStreamToFacebook,
+  willStreamToYouTube,
+} from '@/lib/streamDestinations'
+import { isEmbedErrorHandledByParent } from '@/lib/integration/cmsEmbedProtocol'
+import {
+  resolveYouTubeGoLiveErrorVariant,
+  shouldShowYouTubeGoLiveDialog,
+  type YouTubeGoLiveErrorVariant,
+} from '@/lib/youtubeGoLiveErrors'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
@@ -48,13 +68,16 @@ interface StudioLayoutProps {
 
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
-  const { configuration, refreshConfiguration } = useTenant()
+  const { configuration, refreshConfiguration, tenantId } = useTenant()
+  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh } = useCmsEmbedBridge()
   const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
   const [showSceneDevicePicker, setShowSceneDevicePicker] = useState(false)
   const [showAddSceneModal, setShowAddSceneModal] = useState(false)
   const [showCountdownModal, setShowCountdownModal] = useState(false)
+  const [youtubeGoLiveErrorVariant, setYoutubeGoLiveErrorVariant] =
+    useState<YouTubeGoLiveErrorVariant | null>(null)
   const [roomEnabled, setRoomEnabled] = useState(false)
   const [scenesDrawerOpen, setScenesDrawerOpen] = useState(false)
   const [controlsDrawerOpen, setControlsDrawerOpen] = useState(false)
@@ -82,6 +105,10 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const savedDestinations = useMemo(
     () => configuration?.destinations ?? [],
     [configuration?.destinations],
+  )
+  const platformConnections = useMemo(
+    () => configuration?.platform_connections ?? [],
+    [configuration?.platform_connections],
   )
   const sceneStore = useSceneStore(sessionId, context.isHost, outputStore.setCountdownState)
   const graphicsStore = useGraphicsStore(sessionId, context.isHost, sceneStore.activeSceneId)
@@ -117,8 +144,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           outputStore,
           graphicsStore,
           backgroundMusicStore,
-          deviceStore,
-          tenantDevices: config.devices,
+          applyDevicePreferences: false,
         })
         await graphicsStore.refresh({ force: true })
       } catch (err) {
@@ -154,8 +180,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     mediasoupWsUrl: context.mediasoupWsUrl,
     enabled: roomEnabled,
     autoPublish: false,
-    deviceSelection: deviceStore.isSetupComplete ? deviceStore.selection : null,
   })
+
+  const publishedRef = useRef(false)
 
   const hostPeerId = useMemo(() => {
     if (context.isHost) return context.peerId
@@ -188,10 +215,10 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   )
 
   useEffect(() => {
-    if (deviceStore.isSetupComplete && !showDeviceSetup) {
-      void deviceStore.startPreview()
+    if (error) {
+      toast.error(error)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [error])
 
   const handleDeviceConfirm = useCallback(async () => {
     const selection = { ...deviceStore.selection }
@@ -207,19 +234,26 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
 
   const applyLiveDevices = useCallback(
     async (devices: DeviceSelection) => {
-      deviceStore.setSelection(devices)
-      if (devices.cameraId || devices.microphoneId) {
-        await switchDevices(devices)
+      if (!hasSceneDevices(devices)) return
+      const resolved = await switchDevices(devices)
+      if (resolved) {
+        deviceStore.setSelection(resolved)
       }
     },
     [deviceStore, switchDevices],
   )
 
   useEffect(() => {
-    if (roomEnabled && connectionState === 'connected') {
-      void publishProducers()
-    }
-  }, [roomEnabled, connectionState, publishProducers])
+    if (!roomEnabled || connectionState !== 'connected' || publishedRef.current) return
+    publishedRef.current = true
+    void (async () => {
+      const resolved = await switchDevices(deviceStore.selection)
+      if (resolved) {
+        deviceStore.setSelection(resolved)
+      }
+      await publishProducers()
+    })()
+  }, [roomEnabled, connectionState, publishProducers, switchDevices, deviceStore])
 
   const handleLayoutChange = useCallback(
     async (layout: LayoutType) => {
@@ -374,14 +408,129 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const handleStartStream = useCallback(
     async (type: 'RTMP' | 'HLS', destinations?: Parameters<typeof syncStartStreaming>[1]) => {
       setStreamingAction('starting')
-      if (type === 'RTMP' && destinations?.length) {
-        void persistDestinationsFromStream(destinations)
+      try {
+        if (type === 'HLS') {
+          const result = await syncStartStreaming('HLS')
+          if (result) toast.success('HLS stream started')
+          return
+        }
+
+        let resolvedDestinations = destinations
+
+        if (tenantId && isPersistenceEnabled()) {
+          const currentStreamable = getStreamableDestinations(
+            savedDestinations,
+            platformConnections,
+          )
+          const shouldRefreshFacebook =
+            isEmbedded && willStreamToFacebook(currentStreamable, resolvedDestinations)
+          const shouldRefreshYouTube =
+            isEmbedded &&
+            willStreamToYouTube(platformConnections, savedDestinations, resolvedDestinations)
+
+          await refreshTwitchStreamKeys(tenantId, platformConnections)
+          if (shouldRefreshFacebook) {
+            try {
+              await refreshFacebookStreamKeys(
+                tenantId,
+                platformConnections,
+                requestFacebookLiveRefresh,
+              )
+            } catch (err) {
+              toast.error(
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to refresh Facebook stream key before going live',
+              )
+              return
+            }
+          }
+          if (shouldRefreshYouTube) {
+            try {
+              await refreshYouTubeStreamKeys(
+                tenantId,
+                platformConnections,
+                requestYouTubeLiveRefresh,
+              )
+            } catch (err) {
+              if (shouldShowYouTubeGoLiveDialog(isEmbedded)) {
+                setYoutubeGoLiveErrorVariant(resolveYouTubeGoLiveErrorVariant(err))
+                return
+              }
+              if (!isEmbedErrorHandledByParent(err)) {
+                toast.error(
+                  err instanceof Error
+                    ? err.message
+                    : 'Failed to refresh YouTube stream key before going live',
+                )
+              }
+              return
+            }
+          }
+          await refreshConfiguration()
+          const freshConfig = getLocalTenantConfiguration()
+          const freshStreamable = getStreamableDestinations(
+            freshConfig?.destinations ?? [],
+            freshConfig?.platform_connections ?? [],
+          )
+
+          if (resolvedDestinations?.length) {
+            const selectedLabels = new Set(
+              resolvedDestinations.map((item) => item.label?.trim() || 'Custom'),
+            )
+            const fromSaved = toStreamDestinationInputs(
+              freshStreamable.filter((item) =>
+                selectedLabels.has(item.label.trim() || item.platform || 'Custom'),
+              ),
+            )
+            const manual = resolvedDestinations.filter(
+              (item) =>
+                item.url.trim() &&
+                !freshStreamable.some(
+                  (saved) =>
+                    (saved.label.trim() || saved.platform || 'Custom') ===
+                    (item.label?.trim() || 'Custom'),
+                ),
+            )
+            resolvedDestinations = [...fromSaved, ...manual].filter((item) => item.url.trim())
+
+            if (manual.length > 0) {
+              void persistDestinationsFromStream(manual)
+            }
+          } else {
+            resolvedDestinations = toStreamDestinationInputs(freshStreamable)
+          }
+        }
+
+        if (!resolvedDestinations?.length) {
+          toast.error('No connected destinations available. Connect a destination first.')
+          return
+        }
+
+        const result = await syncStartStreaming('RTMP', resolvedDestinations, {
+          tenantId: tenantId ?? undefined,
+          twitchChatEnabled: hasTwitchStreamDestination(resolvedDestinations),
+        })
+        if (result) {
+          toast.success(`Live on ${formatStreamDestinationSummary(resolvedDestinations)}`)
+        }
+      } finally {
+        setStreamingAction(null)
+        await refreshOutput()
       }
-      await syncStartStreaming(type, destinations)
-      setStreamingAction(null)
-      await refreshOutput()
     },
-    [setStreamingAction, syncStartStreaming, refreshOutput],
+    [
+      setStreamingAction,
+      syncStartStreaming,
+      refreshOutput,
+      tenantId,
+      platformConnections,
+      refreshConfiguration,
+      savedDestinations,
+      isEmbedded,
+      requestFacebookLiveRefresh,
+      requestYouTubeLiveRefresh,
+    ],
   )
 
   const handleStopStream = useCallback(async () => {
@@ -416,6 +565,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
             recordingState,
             streamingState,
             savedDestinations,
+            platformConnections,
             onStartRecording: () => void handleStartRecording(),
             onStopRecording: () => void handleStopRecording(),
             onStartStream: (type, destinations) => void handleStartStream(type, destinations),
@@ -435,6 +585,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     recordingState,
     streamingState,
     savedDestinations,
+    platformConnections,
     handleStartRecording,
     handleStopRecording,
     handleStartStream,
@@ -497,6 +648,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         cameraScenes={cameraScenes}
         onSave={(duration, targetId) => void handleCountdownSave(duration, targetId)}
         isSaving={sceneStore.isMutating}
+      />
+
+      <YouTubeGoLiveErrorDialog
+        open={youtubeGoLiveErrorVariant !== null}
+        onOpenChange={(open) => {
+          if (!open) setYoutubeGoLiveErrorVariant(null)
+        }}
+        variant={youtubeGoLiveErrorVariant ?? 'live_not_enabled'}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">

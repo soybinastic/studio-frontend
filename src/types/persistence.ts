@@ -16,6 +16,7 @@ export interface TenantConfiguration {
   graphics_config: Partial<GraphicsState>
   scenes: PersistedScene[]
   destinations: PersistedDestination[]
+  platform_connections?: PersistedPlatformConnection[]
   asset_catalog: AssetCatalog
   text_material_catalog: TextMaterialCatalog
 }
@@ -103,6 +104,22 @@ export interface PersistedDestination {
   label: string
   url: string
   platform: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PersistedPlatformConnection {
+  connection_id: string
+  tenant_id: string
+  platform: string
+  name: string
+  status: string
+  platform_user_id: string
+  platform_login: string
+  destination_id: string | null
+  has_stream_key: boolean
+  metadata: Record<string, unknown>
   sort_order: number
   created_at: string
   updated_at: string

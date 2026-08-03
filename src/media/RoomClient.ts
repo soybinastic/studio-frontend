@@ -2,17 +2,22 @@ import { AwaitQueue } from 'awaitqueue'
 import * as mediasoupClient from 'mediasoup-client'
 import type { types as MediasoupTypes } from 'mediasoup-client'
 import protooClient from 'protoo-client'
+import { enumerateMediaDevices } from '@/lib/devices'
+import {
+  deviceUnavailableMessage,
+  resolveMediaDevice,
+  resolveSelectionDevices,
+} from '@/lib/resolveDevice'
+import {
+  mediaErrorMessage,
+  openAudioStream,
+  openVideoStream,
+  stopMediaStream,
+} from '@/lib/openMediaStream'
 import { getDeviceInfo } from '@/media/deviceInfo'
 import { isCompositorPeer } from '@/lib/participants'
+import type { DeviceSelection } from '@/types/devices'
 import type { ConnectionState, ParticipantMedia } from '@/types/session'
-
-const MIC_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: false,
-  autoGainControl: false,
-  sampleRate: { ideal: 48000 },
-  channelCount: { ideal: 1 },
-}
 
 const OPUS_CODEC_OPTIONS = {
   opusDtx: false,
@@ -21,20 +26,11 @@ const OPUS_CODEC_OPTIONS = {
   opusMaxAverageBitrate: 64000,
 }
 
-// Match compositor canvas (1920×1080) to avoid upscaling blur in the mix.
-const WEBCAM_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 1920, min: 1280 },
-  height: { ideal: 1080, min: 720 },
-  frameRate: { ideal: 30 },
-}
-
 const WEBCAM_CODEC_OPTIONS = {
   videoGoogleStartBitrate: 2500,
 }
 
-const WEBCAM_ENCODINGS: RTCRtpEncodingParameters[] = [
-  { maxBitrate: 2_500_000 },
-]
+const WEBCAM_ENCODINGS: RTCRtpEncodingParameters[] = [{ maxBitrate: 2_500_000 }]
 
 export interface RoomClientOptions {
   roomId: string
@@ -42,10 +38,7 @@ export interface RoomClientOptions {
   displayName: string
   mediasoupWsUrl: string
   autoPublish?: boolean
-  deviceConstraints?: {
-    cameraId?: string | null
-    microphoneId?: string | null
-  }
+  devicePreferences?: DeviceSelection | null
   onStateChange?: (state: ConnectionState) => void
   onParticipantsChange?: (participants: ParticipantMedia[]) => void
   onError?: (error: Error) => void
@@ -67,24 +60,37 @@ export class RoomClient {
   private micProducer: MediasoupTypes.Producer | null = null
   private micStream: MediaStream | null = null
   private webcamProducer: MediasoupTypes.Producer | null = null
+  private webcamStream: MediaStream | null = null
   private readonly remoteParticipants = new Map<string, RemoteParticipant>()
   private readonly consumingQueue = new AwaitQueue()
   private micEnabled = false
   private webcamEnabled = false
-  private deviceConstraints: { cameraId?: string | null; microphoneId?: string | null } = {}
+  private devicePreferences: DeviceSelection | null = null
 
   constructor(options: RoomClientOptions) {
     this.options = options
-    this.deviceConstraints = options.deviceConstraints ?? {}
+    this.devicePreferences = options.devicePreferences ?? null
   }
 
-  setDeviceConstraints(constraints: { cameraId?: string | null; microphoneId?: string | null }): void {
-    this.deviceConstraints = constraints
+  setDevicePreferences(preferences: DeviceSelection | null): void {
+    this.devicePreferences = preferences
   }
 
   async publishProducers(options?: { mic?: boolean; webcam?: boolean }): Promise<void> {
-    if (options?.mic !== false) await this.enableMic()
-    if (options?.webcam !== false) await this.enableWebcam()
+    if (options?.mic !== false) {
+      try {
+        await this.enableMic()
+      } catch (err) {
+        this.reportError(err, 'Could not enable microphone.')
+      }
+    }
+    if (options?.webcam !== false) {
+      try {
+        await this.enableWebcam()
+      } catch (err) {
+        this.reportError(err, 'Could not enable camera.')
+      }
+    }
   }
 
   get peerId() {
@@ -146,14 +152,22 @@ export class RoomClient {
       return
     }
 
-    const audioConstraints: MediaTrackConstraints = {
-      ...MIC_CONSTRAINTS,
-      ...(this.deviceConstraints.microphoneId
-        ? { deviceId: { exact: this.deviceConstraints.microphoneId } }
-        : {}),
+    const resolved = await this.resolvePreferences()
+    const microphone = resolveMediaDevice(
+      resolved.devices,
+      {
+        deviceId: resolved.selection.microphoneId,
+        label: resolved.selection.microphoneLabel,
+      },
+      'audioinput',
+    )
+    if (!microphone) {
+      throw new Error(deviceUnavailableMessage(resolved.selection, 'microphone'))
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+    const stream = await openAudioStream(microphone.deviceId, 'producer', {
+      label: microphone.label,
+    })
     this.micStream = stream
     const track = stream.getAudioTracks()[0]
 
@@ -187,14 +201,23 @@ export class RoomClient {
       return
     }
 
-    const videoConstraints: MediaTrackConstraints = {
-      ...WEBCAM_VIDEO_CONSTRAINTS,
-      ...(this.deviceConstraints.cameraId
-        ? { deviceId: { exact: this.deviceConstraints.cameraId } }
-        : {}),
+    const resolved = await this.resolvePreferences()
+    const camera = resolveMediaDevice(
+      resolved.devices,
+      {
+        deviceId: resolved.selection.cameraId,
+        label: resolved.selection.cameraLabel,
+      },
+      'videoinput',
+    )
+    if (!camera) {
+      throw new Error(deviceUnavailableMessage(resolved.selection, 'camera'))
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints })
+    const stream = await openVideoStream(camera.deviceId, 'producer', {
+      label: camera.label,
+    })
+    this.webcamStream = stream
     const track = stream.getVideoTracks()[0]
 
     this.webcamProducer = await this.sendTransport.produce({
@@ -218,34 +241,41 @@ export class RoomClient {
     if (!this.webcamProducer) return
     this.webcamProducer.close()
     this.webcamProducer = null
+    this.stopWebcamStream()
     this.webcamEnabled = false
     this.emitParticipants()
   }
 
   async toggleMic(): Promise<void> {
-    if (this.micEnabled) {
-      await this.disableMic()
-    } else {
-      await this.enableMic()
+    try {
+      if (this.micEnabled) {
+        await this.disableMic()
+      } else {
+        await this.enableMic()
+      }
+    } catch (err) {
+      this.reportError(err, 'Could not toggle microphone.')
+      throw err
     }
   }
 
   async toggleWebcam(): Promise<void> {
-    if (this.webcamEnabled) {
-      await this.disableWebcam()
-    } else {
-      await this.enableWebcam()
+    try {
+      if (this.webcamEnabled) {
+        await this.disableWebcam()
+      } else {
+        await this.enableWebcam()
+      }
+    } catch (err) {
+      this.reportError(err, 'Could not toggle camera.')
+      throw err
     }
   }
 
-  async replaceDevices(selection: {
-    cameraId?: string | null
-    microphoneId?: string | null
-  }): Promise<void> {
-    this.setDeviceConstraints({
-      cameraId: selection.cameraId,
-      microphoneId: selection.microphoneId,
-    })
+  async replaceDevices(selection: DeviceSelection): Promise<DeviceSelection> {
+    const devices = await enumerateMediaDevices()
+    const resolved = resolveSelectionDevices(devices, selection)
+    this.setDevicePreferences(resolved)
 
     const wasMic = this.micEnabled
     const wasWebcam = this.webcamEnabled
@@ -253,8 +283,22 @@ export class RoomClient {
     if (this.micProducer) await this.disableMic()
     if (this.webcamProducer) await this.disableWebcam()
 
-    if (wasMic) await this.enableMic()
-    if (wasWebcam) await this.enableWebcam()
+    if (wasMic) {
+      try {
+        await this.enableMic()
+      } catch (err) {
+        this.reportError(err, 'Could not switch microphone.')
+      }
+    }
+    if (wasWebcam) {
+      try {
+        await this.enableWebcam()
+      } catch (err) {
+        this.reportError(err, 'Could not switch camera.')
+      }
+    }
+
+    return resolved
   }
 
   close(): void {
@@ -264,6 +308,7 @@ export class RoomClient {
     this.micProducer?.close()
     this.stopMicStream()
     this.webcamProducer?.close()
+    this.stopWebcamStream()
     this.sendTransport?.close()
     this.recvTransport?.close()
     this.protoo?.close()
@@ -275,6 +320,29 @@ export class RoomClient {
     this.protoo = null
     this.remoteParticipants.clear()
     this.setState('disconnected')
+  }
+
+  private async resolvePreferences(): Promise<{
+    devices: Awaited<ReturnType<typeof enumerateMediaDevices>>
+    selection: DeviceSelection
+  }> {
+    const devices = await enumerateMediaDevices()
+    const selection = this.devicePreferences
+      ? resolveSelectionDevices(devices, this.devicePreferences)
+      : resolveSelectionDevices(devices, {
+          cameraId: null,
+          cameraLabel: null,
+          microphoneId: null,
+          microphoneLabel: null,
+          speakerId: null,
+        })
+    this.devicePreferences = selection
+    return { devices, selection }
+  }
+
+  private reportError(err: unknown, fallback: string): void {
+    const message = err instanceof Error ? err.message : mediaErrorMessage(err, fallback)
+    this.options.onError?.(new Error(message))
   }
 
   private async joinRoom(): Promise<void> {
@@ -309,13 +377,13 @@ export class RoomClient {
         callback: () => void,
         errback: (error: Error) => void,
       ) => {
-      this.protoo!
-        .request('connectWebRtcTransport', {
-          transportId: this.sendTransport!.id,
-          dtlsParameters,
-        })
-        .then(callback)
-        .catch(errback)
+        this.protoo!
+          .request('connectWebRtcTransport', {
+            transportId: this.sendTransport!.id,
+            dtlsParameters,
+          })
+          .then(callback)
+          .catch(errback)
       },
     )
 
@@ -326,22 +394,26 @@ export class RoomClient {
           kind,
           rtpParameters,
           appData,
-        }: { kind: MediasoupTypes.MediaKind; rtpParameters: MediasoupTypes.RtpParameters; appData: Record<string, unknown> },
+        }: {
+          kind: MediasoupTypes.MediaKind
+          rtpParameters: MediasoupTypes.RtpParameters
+          appData: Record<string, unknown>
+        },
         callback: (data: { id: string }) => void,
         errback: (error: Error) => void,
       ) => {
-      try {
-        const { producerId } = (await this.protoo!.request('produce', {
-          transportId: this.sendTransport!.id,
-          kind,
-          rtpParameters,
-          appData,
-        })) as { producerId: string }
-        callback({ id: producerId })
-      } catch (error) {
-        errback(error as Error)
-      }
-    },
+        try {
+          const { producerId } = (await this.protoo!.request('produce', {
+            transportId: this.sendTransport!.id,
+            kind,
+            rtpParameters,
+            appData,
+          })) as { producerId: string }
+          callback({ id: producerId })
+        } catch (error) {
+          errback(error as Error)
+        }
+      },
     )
 
     const recvInfo = (await this.protoo.request('createWebRtcTransport', {
@@ -363,13 +435,13 @@ export class RoomClient {
         callback: () => void,
         errback: (error: Error) => void,
       ) => {
-      this.protoo!
-        .request('connectWebRtcTransport', {
-          transportId: this.recvTransport!.id,
-          dtlsParameters,
-        })
-        .then(callback)
-        .catch(errback)
+        this.protoo!
+          .request('connectWebRtcTransport', {
+            transportId: this.recvTransport!.id,
+            dtlsParameters,
+          })
+          .then(callback)
+          .catch(errback)
       },
     )
 
@@ -553,11 +625,13 @@ export class RoomClient {
   }
 
   private stopMicStream(): void {
-    if (!this.micStream) return
-    for (const track of this.micStream.getTracks()) {
-      track.stop()
-    }
+    stopMediaStream(this.micStream)
     this.micStream = null
+  }
+
+  private stopWebcamStream(): void {
+    stopMediaStream(this.webcamStream)
+    this.webcamStream = null
   }
 
   private unlockAutoplay(): void {

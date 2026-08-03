@@ -1,4 +1,6 @@
 import type { DeviceSelection, MediaDeviceInfo } from '@/types/devices'
+import { EMPTY_DEVICE_SELECTION } from '@/types/devices'
+import { resolveSelectionDevices } from '@/lib/resolveDevice'
 
 export function mapMediaDevices(raw: MediaDeviceInfo[]): MediaDeviceInfo[] {
   return raw
@@ -9,31 +11,15 @@ export function mapMediaDevices(raw: MediaDeviceInfo[]): MediaDeviceInfo[] {
         d.label ||
         `${d.kind.replace('input', '').replace('output', '')} (${d.deviceId.slice(0, 8)})`,
       kind: d.kind,
+      groupId: d.groupId,
     }))
 }
 
 export function pickDefaultSelection(
   devices: MediaDeviceInfo[],
-  prev: DeviceSelection = { cameraId: null, microphoneId: null, speakerId: null },
+  prev: DeviceSelection,
 ): DeviceSelection {
-  const cameras = devices.filter((d) => d.kind === 'videoinput')
-  const mics = devices.filter((d) => d.kind === 'audioinput')
-  const speakers = devices.filter((d) => d.kind === 'audiooutput')
-
-  return {
-    cameraId:
-      prev.cameraId && cameras.some((d) => d.deviceId === prev.cameraId)
-        ? prev.cameraId
-        : cameras[0]?.deviceId ?? null,
-    microphoneId:
-      prev.microphoneId && mics.some((d) => d.deviceId === prev.microphoneId)
-        ? prev.microphoneId
-        : mics[0]?.deviceId ?? null,
-    speakerId:
-      prev.speakerId && speakers.some((d) => d.deviceId === prev.speakerId)
-        ? prev.speakerId
-        : speakers[0]?.deviceId ?? null,
-  }
+  return resolveSelectionDevices(devices, prev)
 }
 
 export async function enumerateMediaDevices(): Promise<MediaDeviceInfo[]> {
@@ -43,10 +29,28 @@ export async function enumerateMediaDevices(): Promise<MediaDeviceInfo[]> {
       deviceId: d.deviceId,
       label: d.label,
       kind: d.kind as MediaDeviceInfo['kind'],
+      groupId: d.groupId,
     })),
   )
 }
 
 export function hasSceneDevices(devices: DeviceSelection): boolean {
-  return Boolean(devices.cameraId || devices.microphoneId || devices.speakerId)
+  return Boolean(
+    devices.cameraId ||
+      devices.cameraLabel ||
+      devices.microphoneId ||
+      devices.microphoneLabel ||
+      devices.speakerId,
+  )
+}
+
+export function normalizeDeviceSelection(raw: Partial<DeviceSelection> | null | undefined): DeviceSelection {
+  if (!raw) return { ...EMPTY_DEVICE_SELECTION }
+  return {
+    cameraId: raw.cameraId ?? null,
+    cameraLabel: raw.cameraLabel ?? null,
+    microphoneId: raw.microphoneId ?? null,
+    microphoneLabel: raw.microphoneLabel ?? null,
+    speakerId: raw.speakerId ?? null,
+  }
 }

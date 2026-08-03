@@ -12,6 +12,7 @@ import {
 import { AudioMeter } from '@/components/studio/device-setup/AudioMeter'
 import { CameraPreview } from '@/components/studio/device-setup/CameraPreview'
 import type { DeviceStore } from '@/hooks/useDeviceStore'
+import { selectionFromMediaDevice } from '@/lib/resolveDevice'
 
 interface DeviceSetupModalProps {
   deviceStore: DeviceStore
@@ -25,7 +26,6 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     microphones,
     speakers,
     selection,
-    setSelection,
     previewStream,
     startPreview,
     audioLevel,
@@ -35,20 +35,23 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     setCameraEnabled,
     testSpeaker,
     isEnumerating,
+    selectSpeaker,
   } = deviceStore
 
   const handleCameraChange = (cameraId: string) => {
-    setSelection({ cameraId })
-    void startPreview({ cameraId, microphoneId: selection.microphoneId ?? undefined })
+    const device = cameras.find((d) => d.deviceId === cameraId)
+    if (!device) return
+    void startPreview(selectionFromMediaDevice(device, 'camera'))
   }
 
   const handleMicChange = (microphoneId: string) => {
-    setSelection({ microphoneId })
-    void startPreview({ cameraId: selection.cameraId ?? undefined, microphoneId })
+    const device = microphones.find((d) => d.deviceId === microphoneId)
+    if (!device) return
+    void startPreview(selectionFromMediaDevice(device, 'microphone'))
   }
 
   const handleSpeakerChange = (speakerId: string) => {
-    setSelection({ speakerId })
+    selectSpeaker(speakerId)
   }
 
   const handleConfirm = () => {
@@ -60,9 +63,9 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     if (!open) return
 
     void (async () => {
-      const selection = await deviceStore.initializeDevices()
-      if (selection) {
-        await deviceStore.startPreview(selection)
+      const nextSelection = await deviceStore.initializeDevices()
+      if (nextSelection) {
+        void deviceStore.startPreview(nextSelection)
       }
     })()
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps

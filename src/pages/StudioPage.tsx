@@ -6,11 +6,15 @@ import { getSession } from '@/api/sessions'
 import { ApiError } from '@/api/client'
 import { StudioLayout } from '@/components/studio/StudioLayout'
 import { useTenant } from '@/context/TenantProvider'
+import {
+  bootstrapEmbeddedStudioSession,
+  shouldUseEmbeddedSessionBootstrap,
+} from '@/lib/integration/embeddedSessionBootstrap'
 import { loadStudioContext } from '@/lib/studioContext'
 import type { StudioSessionContext } from '@/types/session'
 
 export function StudioPage() {
-  const { sessionId = '' } = useParams()
+  const { sessionId: urlSessionId = '' } = useParams()
   const navigate = useNavigate()
   const { isReady: tenantReady } = useTenant()
   const [context, setContext] = useState<StudioSessionContext | null>(null)
@@ -20,7 +24,23 @@ export function StudioPage() {
     let cancelled = false
 
     async function bootstrap() {
-      const stored = loadStudioContext(sessionId)
+      if (shouldUseEmbeddedSessionBootstrap()) {
+        try {
+          const embeddedContext = await bootstrapEmbeddedStudioSession(urlSessionId)
+          if (!cancelled) {
+            setContext(embeddedContext)
+          }
+        } catch (err) {
+          if (!cancelled) {
+            toast.error(err instanceof ApiError ? err.message : 'Failed to start embedded studio session')
+          }
+        } finally {
+          if (!cancelled) setBootstrapping(false)
+        }
+        return
+      }
+
+      const stored = loadStudioContext(urlSessionId)
       if (stored) {
         if (!cancelled) {
           setContext(stored)
@@ -30,7 +50,7 @@ export function StudioPage() {
       }
 
       try {
-        const session = await getSession(sessionId)
+        const session = await getSession(urlSessionId)
         if (session.status === 'ENDED') {
           toast.error('This session has ended')
           navigate('/')
@@ -54,7 +74,7 @@ export function StudioPage() {
     return () => {
       cancelled = true
     }
-  }, [sessionId, navigate])
+  }, [urlSessionId, navigate])
 
   if (bootstrapping || !tenantReady || !context) {
     return (
@@ -64,5 +84,5 @@ export function StudioPage() {
     )
   }
 
-  return <StudioLayout context={context} sessionId={sessionId} />
+  return <StudioLayout context={context} sessionId={context.sessionId} />
 }

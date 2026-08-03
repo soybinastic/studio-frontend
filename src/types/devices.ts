@@ -2,12 +2,23 @@ export interface MediaDeviceInfo {
   deviceId: string
   label: string
   kind: 'videoinput' | 'audioinput' | 'audiooutput'
+  groupId?: string
 }
 
 export interface DeviceSelection {
   cameraId: string | null
+  cameraLabel: string | null
   microphoneId: string | null
+  microphoneLabel: string | null
   speakerId: string | null
+}
+
+export const EMPTY_DEVICE_SELECTION: DeviceSelection = {
+  cameraId: null,
+  cameraLabel: null,
+  microphoneId: null,
+  microphoneLabel: null,
+  speakerId: null,
 }
 
 export interface DeviceState {

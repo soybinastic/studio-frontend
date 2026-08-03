@@ -9,6 +9,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1a1a2e" />
     <title>Mini Streaming Studio</title>
+    <script>
+      (function () {
+        if (!location.pathname.endsWith('/oauth/twitch/complete')) return
+        var params = new URLSearchParams(location.search)
+        var twitch = params.get('twitch')
+        if (twitch !== 'connected' && twitch !== 'error') return
+        var sessionId = params.get('oauth_session') || 'latest'
+        var payload = JSON.stringify({
+          sessionId: sessionId,
+          result: twitch === 'connected' ? 'connected' : 'error',
+          message: params.get('message') || undefined,
+          connectionId: params.get('connection_id') || undefined,
+          at: Date.now(),
+        })
+        try {
+          localStorage.setItem('studio:twitch-oauth-result:' + sessionId, payload)
+          localStorage.setItem('studio:twitch-oauth-result:latest', payload)
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

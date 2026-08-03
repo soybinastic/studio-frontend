@@ -30,6 +30,7 @@ export function useOutputStore({
   const [graphics, setGraphics] = useState<GraphicsState | null>(null)
   const [recordingAction, setRecordingAction] = useState<'starting' | 'stopping' | null>(null)
   const [streamingAction, setStreamingAction] = useState<'starting' | 'stopping' | null>(null)
+  const previousStreamStatusRef = useRef<string | null>(null)
   const countdownStateRef = useRef(countdownState)
   countdownStateRef.current = countdownState
 
@@ -74,7 +75,33 @@ export function useOutputStore({
   useEffect(() => {
     if (!isHost) return
     void refreshHostOutput()
+    const interval = window.setInterval(() => void refreshHostOutput(), SESSION_POLL_MS)
+    return () => window.clearInterval(interval)
   }, [isHost, refreshHostOutput])
+
+  useEffect(() => {
+    if (!isHost) return
+    const latestStream = streams[0]
+    if (!latestStream) return
+
+    if (
+      latestStream.status === 'FAILED' &&
+      previousStreamStatusRef.current === 'LIVE'
+    ) {
+      const failedDestinations = latestStream.destinations.filter(
+        (destination) => destination.status === 'FAILED',
+      )
+      if (failedDestinations.length > 0) {
+        toast.error(
+          `Stream failed for ${failedDestinations.map((d) => d.label || 'destination').join(', ')}`,
+        )
+      } else {
+        toast.error('Stream failed')
+      }
+    }
+
+    previousStreamStatusRef.current = latestStream.status
+  }, [isHost, streams])
 
   const activeRecording = recordings.find((r) => r.status === 'RECORDING')
   const activeStream = streams.find((s) => s.status === 'LIVE')
