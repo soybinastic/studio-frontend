@@ -16,7 +16,13 @@ import { ApiError } from '@/api/client'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useTenant } from '@/context/TenantProvider'
 import type { EmbedPlatform, PlatformConnectionPayload } from '@/lib/integration/cmsEmbedProtocol'
-import { isEmbeddedIntegration } from '@/lib/integration/integrationMode'
+import { isEmbedInboundMessage } from '@/lib/integration/cmsEmbedProtocol'
+import { isEmbeddedIntegration, isAllowedEmbedParentOrigin } from '@/lib/integration/integrationMode'
+import {
+  clearEmbedYouTubeConnectAwaiting,
+  isEmbedYouTubeConnectAwaiting,
+  markEmbedYouTubeConnectAwaiting,
+} from '@/lib/integration/youtubeEmbedOAuth'
 import { mapEmbedPayloadToImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
@@ -129,6 +135,49 @@ export function useDestinations(options?: UseDestinationsOptions) {
     setDestinations(syncedDestinations)
   }, [syncedDestinations])
 
+  useEffect(() => {
+    if (!isEmbedded || !persistenceEnabled || !tenantId) return
+    if (!isEmbedYouTubeConnectAwaiting(tenantId)) return
+
+    const onMessage = (event: MessageEvent) => {
+      if (!isAllowedEmbedParentOrigin(event.origin)) return
+      if (!isEmbedInboundMessage(event.data)) return
+
+      if (event.data.type === 'studio-embed/v1/platform-connected') {
+        if (event.data.platform !== 'youtube') return
+        clearEmbedYouTubeConnectAwaiting()
+        void importPlatformConnectionFromEmbed(
+          tenantId,
+          mapEmbedPayloadToImportRequest('youtube', event.data.payload),
+        )
+          .then(async () => {
+            await refreshConfiguration()
+            toast.success('YouTube connected via CMS')
+          })
+          .catch((err) => {
+            toast.error(err instanceof Error ? err.message : 'YouTube connection failed')
+          })
+        return
+      }
+
+      if (event.data.type === 'studio-embed/v1/platform-connect-failed') {
+        if (event.data.platform !== 'youtube') return
+        clearEmbedYouTubeConnectAwaiting()
+        toast.error(event.data.error || 'YouTube connection failed')
+      }
+    }
+
+    window.addEventListener('message', onMessage)
+    const timeoutId = window.setTimeout(() => {
+      clearEmbedYouTubeConnectAwaiting()
+    }, 120_000)
+
+    return () => {
+      window.removeEventListener('message', onMessage)
+      window.clearTimeout(timeoutId)
+    }
+  }, [isEmbedded, persistenceEnabled, tenantId, refreshConfiguration])
+
   const reload = useCallback(async () => {
     if (persistenceEnabled) {
       await refreshConfiguration()
@@ -159,11 +208,18 @@ export function useDestinations(options?: UseDestinationsOptions) {
 
       setIsConnecting(true)
       try {
+        if (platform === 'youtube') {
+          markEmbedYouTubeConnectAwaiting(tenantId)
+        }
         const payload = await requestPlatformConnect(platform, tenantId)
+        clearEmbedYouTubeConnectAwaiting()
         await importEmbeddedPayload(platform, payload)
         const label = platform.charAt(0).toUpperCase() + platform.slice(1)
         toast.success(`${label} connected via CMS`)
       } catch (err) {
+        if (platform !== 'youtube') {
+          clearEmbedYouTubeConnectAwaiting()
+        }
         toast.error(err instanceof Error ? err.message : `${platform} connection failed`)
       } finally {
         setIsConnecting(false)
