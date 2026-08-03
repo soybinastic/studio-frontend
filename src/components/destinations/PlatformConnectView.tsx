@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import type { FacebookPagePickerState } from '@/hooks/useDestinations'
 import type { FacebookTarget } from '@/types/destinations'
 import { DestinationPlatform as Platform } from '@/types/destinations'
 import type { PlatformDefinition } from '@/constants/destinations'
@@ -12,6 +13,8 @@ interface PlatformConnectViewProps {
   onBack: () => void
   onConnect: (facebookTarget?: FacebookTarget) => void | Promise<void>
   isConnecting?: boolean
+  facebookPagePicker?: FacebookPagePickerState | null
+  onFacebookPageConnected?: () => void
 }
 
 const FACEBOOK_TARGETS: { id: FacebookTarget; label: string; description: string }[] = [
@@ -24,9 +27,13 @@ export function PlatformConnectView({
   onBack,
   onConnect,
   isConnecting,
+  facebookPagePicker,
+  onFacebookPageConnected,
 }: PlatformConnectViewProps) {
   const [facebookTarget, setFacebookTarget] = useState<FacebookTarget>('profile')
+  const [selectingPageId, setSelectingPageId] = useState<string | null>(null)
   const isFacebook = platform.id === Platform.FACEBOOK
+  const showPagePicker = isFacebook && Boolean(facebookPagePicker)
 
   const handleConnect = () => {
     if (isFacebook) {
@@ -34,6 +41,79 @@ export function PlatformConnectView({
     } else {
       void onConnect()
     }
+  }
+
+  const handleBack = () => {
+    if (showPagePicker) {
+      facebookPagePicker?.cancel()
+      return
+    }
+    onBack()
+  }
+
+  const handleSelectPage = async (pageId: string) => {
+    if (!facebookPagePicker || selectingPageId) return
+    setSelectingPageId(pageId)
+    try {
+      const ok = await facebookPagePicker.selectPage(pageId)
+      if (ok) {
+        onFacebookPageConnected?.()
+      }
+    } finally {
+      setSelectingPageId(null)
+    }
+  }
+
+  if (showPagePicker && facebookPagePicker) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-start gap-4">
+          <PlatformIcon platform={platform.id} size="lg" />
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold">Select a Facebook Page</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {facebookPagePicker.accountName
+                ? `Choose a page to stream as ${facebookPagePicker.accountName}.`
+                : 'Choose the page you want to stream to.'}
+            </p>
+          </div>
+        </div>
+
+        {facebookPagePicker.pages.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No Facebook pages found for this account.</p>
+        ) : (
+          <ul className="space-y-2">
+            {facebookPagePicker.pages.map((page) => {
+              const isSelecting = selectingPageId === page.id
+              return (
+                <li key={page.id}>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors',
+                      'hover:border-primary/40 hover:bg-accent/30',
+                      isSelecting && 'border-primary/50 bg-primary/5',
+                    )}
+                    disabled={Boolean(selectingPageId) || isConnecting}
+                    onClick={() => void handleSelectPage(page.id)}
+                  >
+                    <span className="font-medium">{page.name}</span>
+                    {isSelecting && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+
+        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={handleBack} disabled={Boolean(selectingPageId)}>
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -47,7 +127,7 @@ export function PlatformConnectView({
       </div>
 
       {isFacebook && (
-        <fieldset className="space-y-3">
+        <fieldset className="space-y-3" disabled={isConnecting}>
           <legend className="sr-only">Choose Facebook destination</legend>
           {FACEBOOK_TARGETS.map((target) => (
             <label
@@ -78,7 +158,7 @@ export function PlatformConnectView({
       )}
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" onClick={onBack} disabled={isConnecting}>
+        <Button type="button" variant="outline" onClick={handleBack} disabled={isConnecting}>
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>

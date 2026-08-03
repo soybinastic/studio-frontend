@@ -20,6 +20,7 @@ import {
   PLATFORM_BY_ID,
   PLATFORM_DEFINITIONS,
 } from '@/constants/destinations'
+import type { ConnectFacebookResult, FacebookPagePickerState } from '@/hooks/useDestinations'
 import { PlatformSelector } from '@/components/destinations/PlatformSelector'
 import { PlatformConnectView } from '@/components/destinations/PlatformConnectView'
 import { CustomRTMPForm } from '@/components/destinations/CustomRTMPForm'
@@ -32,9 +33,11 @@ interface DestinationOutputsModalProps {
   destinations: ConnectedDestination[]
   isConnecting: boolean
   connectYouTube: () => void | Promise<void>
-  connectFacebook: (target: FacebookTarget) => void | Promise<void>
+  connectFacebook: (target: FacebookTarget) => Promise<ConnectFacebookResult>
   connectTwitch: () => void | Promise<void>
   connectCustomRTMP: (values: CustomRTMPFormValues) => void | Promise<void>
+  facebookPagePicker?: FacebookPagePickerState | null
+  clearFacebookPagePicker?: () => void
   removeDestination: (id: string) => void
   disconnectDestination: (id: string) => void
   reconnectDestination: (id: string) => void
@@ -62,6 +65,8 @@ export function DestinationOutputsModal({
   connectFacebook,
   connectTwitch,
   connectCustomRTMP,
+  facebookPagePicker,
+  clearFacebookPagePicker,
   removeDestination,
   disconnectDestination,
   reconnectDestination,
@@ -113,23 +118,34 @@ export function DestinationOutputsModal({
   }
 
   const handleClose = (nextOpen: boolean) => {
+    if (!nextOpen && (isConnecting || facebookPagePicker)) {
+      clearFacebookPagePicker?.()
+    }
     if (!nextOpen && isConnecting) return
     onOpenChange(nextOpen)
   }
 
   const handleOAuthConnect = async (facebookTarget?: FacebookTarget) => {
+    let shouldReset = true
+
     switch (step) {
       case 'connect-youtube':
         await connectYouTube()
         break
       case 'connect-facebook':
-        if (facebookTarget) await connectFacebook(facebookTarget)
+        if (facebookTarget) {
+          const result = await connectFacebook(facebookTarget)
+          shouldReset = result === 'completed'
+        }
         break
       case 'connect-twitch':
         await connectTwitch()
         break
     }
-    resetToList()
+
+    if (shouldReset) {
+      resetToList()
+    }
   }
 
   const handleCustomSubmit = async (values: CustomRTMPFormValues) => {
@@ -170,8 +186,8 @@ export function DestinationOutputsModal({
             : 'max-h-[min(92dvh,calc(100dvh-2rem))] overflow-y-auto sm:max-w-xl'
         }
         aria-describedby="destination-outputs-description"
-        onPointerDownOutside={(e) => isConnecting && e.preventDefault()}
-        onEscapeKeyDown={(e) => isConnecting && e.preventDefault()}
+        onPointerDownOutside={(e) => (isConnecting || facebookPagePicker) && e.preventDefault()}
+        onEscapeKeyDown={(e) => (isConnecting || facebookPagePicker) && e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -209,6 +225,8 @@ export function DestinationOutputsModal({
               onBack={handleBack}
               onConnect={handleOAuthConnect}
               isConnecting={isConnecting}
+              facebookPagePicker={facebookPagePicker}
+              onFacebookPageConnected={resetToList}
             />
           )}
 

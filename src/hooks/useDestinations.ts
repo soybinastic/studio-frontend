@@ -15,7 +15,7 @@ import {
 import { ApiError } from '@/api/client'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useTenant } from '@/context/TenantProvider'
-import type { EmbedPlatform } from '@/lib/integration/cmsEmbedProtocol'
+import type { EmbedPlatform, PlatformConnectionPayload } from '@/lib/integration/cmsEmbedProtocol'
 import { isEmbeddedIntegration } from '@/lib/integration/integrationMode'
 import { mapEmbedPayloadToImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
@@ -37,11 +37,20 @@ import { DestinationPlatform as Platform, DestinationStatus as Status } from '@/
 import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
 
 function mapPlatformConnection(connection: PersistedPlatformConnection): ConnectedDestination {
+  const accountType = connection.metadata?.account_type
+  const facebookTarget =
+    accountType === 'Page' || accountType === 'page'
+      ? ('page' as const)
+      : accountType === 'profile' || accountType === 'Profile'
+        ? ('profile' as const)
+        : undefined
+
   return {
     id: connection.connection_id,
     platform: connection.platform as DestinationPlatform,
     name: connection.name,
     status: connection.status as DestinationStatus,
+    facebookTarget,
     createdAt: connection.created_at,
   }
 }
@@ -81,13 +90,23 @@ function buildDestinationsFromConfig(
   return [...platformConnections.map(mapPlatformConnection), ...customDestinations]
 }
 
+export type FacebookPagePickerState = {
+  pages: Array<{ id: string; name: string }>
+  accountName?: string
+  selectPage: (pageId: string) => Promise<boolean>
+  cancel: () => void
+}
+
+export type ConnectFacebookResult = 'completed' | 'awaiting_page' | 'cancelled'
+
 export interface UseDestinationsOptions {
   onTwitchConnected?: () => void
 }
 
 export function useDestinations(options?: UseDestinationsOptions) {
   const { tenantId, configuration, refreshConfiguration } = useTenant()
-  const { requestPlatformConnect } = useCmsEmbedBridge()
+  const { requestPlatformConnect, requestFacebookConnect, cancelActivePlatformConnect } =
+    useCmsEmbedBridge()
   const isEmbedded = isEmbeddedIntegration()
   const persistenceEnabled = isPersistenceEnabled()
 
@@ -102,6 +121,9 @@ export function useDestinations(options?: UseDestinationsOptions) {
 
   const [destinations, setDestinations] = useState<ConnectedDestination[]>(syncedDestinations)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [facebookPagePicker, setFacebookPagePicker] = useState<FacebookPagePickerState | null>(
+    null,
+  )
 
   useEffect(() => {
     setDestinations(syncedDestinations)
@@ -113,6 +135,21 @@ export function useDestinations(options?: UseDestinationsOptions) {
     }
   }, [persistenceEnabled, refreshConfiguration])
 
+  const importEmbeddedPayload = useCallback(
+    async (platform: EmbedPlatform, payload: PlatformConnectionPayload) => {
+      if (!persistenceEnabled || !tenantId) {
+        throw new Error('Persistence is not enabled')
+      }
+      await importPlatformConnectionFromEmbed(
+        tenantId,
+        mapEmbedPayloadToImportRequest(platform, payload),
+      )
+      await reload()
+      options?.onTwitchConnected?.()
+    },
+    [persistenceEnabled, tenantId, reload, options?.onTwitchConnected],
+  )
+
   const connectEmbeddedPlatform = useCallback(
     async (platform: EmbedPlatform) => {
       if (!persistenceEnabled || !tenantId) {
@@ -123,12 +160,7 @@ export function useDestinations(options?: UseDestinationsOptions) {
       setIsConnecting(true)
       try {
         const payload = await requestPlatformConnect(platform, tenantId)
-        await importPlatformConnectionFromEmbed(
-          tenantId,
-          mapEmbedPayloadToImportRequest(platform, payload),
-        )
-        await reload()
-        options?.onTwitchConnected?.()
+        await importEmbeddedPayload(platform, payload)
         const label = platform.charAt(0).toUpperCase() + platform.slice(1)
         toast.success(`${label} connected via CMS`)
       } catch (err) {
@@ -137,14 +169,13 @@ export function useDestinations(options?: UseDestinationsOptions) {
         setIsConnecting(false)
       }
     },
-    [
-      persistenceEnabled,
-      tenantId,
-      requestPlatformConnect,
-      reload,
-      options?.onTwitchConnected,
-    ],
+    [persistenceEnabled, tenantId, requestPlatformConnect, importEmbeddedPayload],
   )
+
+  const clearFacebookPagePicker = useCallback(() => {
+    setFacebookPagePicker(null)
+    cancelActivePlatformConnect()
+  }, [cancelActivePlatformConnect])
 
   const connectTwitch = useCallback(async () => {
     if (isEmbedded) {
@@ -225,13 +256,70 @@ export function useDestinations(options?: UseDestinationsOptions) {
     toast.info('YouTube integration coming soon')
   }, [isEmbedded, connectEmbeddedPlatform])
 
-  const connectFacebook = useCallback(async (_target: FacebookTarget) => {
-    if (isEmbedded) {
-      await connectEmbeddedPlatform('facebook')
-      return
-    }
-    toast.info('Facebook integration coming soon')
-  }, [isEmbedded, connectEmbeddedPlatform])
+  const connectFacebook = useCallback(
+    async (target: FacebookTarget): Promise<ConnectFacebookResult> => {
+      if (!isEmbedded) {
+        toast.info('Facebook integration coming soon')
+        return 'completed'
+      }
+
+      if (!persistenceEnabled || !tenantId) {
+        toast.error('Persistence is not enabled')
+        return 'cancelled'
+      }
+
+      clearFacebookPagePicker()
+      setIsConnecting(true)
+      try {
+        const flow = await requestFacebookConnect(target, tenantId)
+
+        if (flow.status === 'connected') {
+          await importEmbeddedPayload('facebook', flow.payload)
+          toast.success('Facebook connected via CMS')
+          return 'completed'
+        }
+
+        setIsConnecting(false)
+        setFacebookPagePicker({
+          pages: flow.pages,
+          accountName: flow.accountName,
+          selectPage: async (pageId: string) => {
+            setIsConnecting(true)
+            try {
+              const payload = await flow.selectPage(pageId)
+              await importEmbeddedPayload('facebook', payload)
+              setFacebookPagePicker(null)
+              toast.success('Facebook connected via CMS')
+              return true
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Facebook connection failed')
+              return false
+            } finally {
+              setIsConnecting(false)
+            }
+          },
+          cancel: () => {
+            clearFacebookPagePicker()
+            setIsConnecting(false)
+          },
+        })
+        return 'awaiting_page'
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Facebook connection failed')
+        return 'cancelled'
+      } finally {
+        setIsConnecting(false)
+      }
+    },
+    [
+      isEmbedded,
+      persistenceEnabled,
+      tenantId,
+      requestFacebookConnect,
+      importEmbeddedPayload,
+      clearFacebookPagePicker,
+    ],
+  )
 
   const connectCustomRTMP = useCallback(
     async (values: CustomRTMPFormValues) => {
@@ -317,7 +405,7 @@ export function useDestinations(options?: UseDestinationsOptions) {
         return
       }
       if (isEmbedded && destination?.platform === Platform.FACEBOOK) {
-        await connectEmbeddedPlatform('facebook')
+        await connectFacebook(destination.facebookTarget ?? 'profile')
         return
       }
 
@@ -337,12 +425,14 @@ export function useDestinations(options?: UseDestinationsOptions) {
         toast.error(err instanceof ApiError ? err.message : 'Failed to reconnect destination')
       }
     },
-    [connectTwitch, connectEmbeddedPlatform, destinations, isEmbedded, persistenceEnabled, tenantId, reload],
+    [connectTwitch, connectFacebook, connectEmbeddedPlatform, destinations, isEmbedded, persistenceEnabled, tenantId, reload],
   )
 
   return {
     destinations,
     isConnecting,
+    facebookPagePicker,
+    clearFacebookPagePicker,
     connectYouTube,
     connectFacebook,
     connectTwitch,

@@ -1,5 +1,7 @@
 export type EmbedPlatform = 'twitch' | 'youtube' | 'facebook'
 
+export type FacebookEmbedTarget = 'profile' | 'page'
+
 export const STUDIO_EMBED_PROTOCOL_PREFIX = 'studio-embed/v1'
 
 export interface EmbedReadyMessage {
@@ -18,6 +20,30 @@ export interface EmbedConnectPlatformMessage {
   requestId: string
   tenantId?: string
   platform: EmbedPlatform
+  facebookTarget?: FacebookEmbedTarget
+}
+
+export interface EmbedCancelPlatformConnectMessage {
+  type: 'studio-embed/v1/cancel-platform-connect'
+  requestId: string
+}
+
+export interface EmbedSelectFacebookPageMessage {
+  type: 'studio-embed/v1/select-facebook-page'
+  requestId: string
+  pageId: string
+}
+
+export interface EmbedFacebookPageOption {
+  id: string
+  name: string
+}
+
+export interface EmbedFacebookPagesMessage {
+  type: 'studio-embed/v1/facebook-pages'
+  requestId: string
+  pages: EmbedFacebookPageOption[]
+  accountName?: string
 }
 
 export interface PlatformConnectionPayload {
@@ -46,16 +72,29 @@ export interface EmbedPlatformConnectFailedMessage {
   error: string
 }
 
-export type EmbedOutboundMessage = EmbedReadyMessage | EmbedConnectPlatformMessage
+export type EmbedOutboundMessage =
+  | EmbedReadyMessage
+  | EmbedConnectPlatformMessage
+  | EmbedCancelPlatformConnectMessage
+  | EmbedSelectFacebookPageMessage
+
 export type EmbedInboundMessage =
   | EmbedConfigMessage
+  | EmbedFacebookPagesMessage
   | EmbedPlatformConnectedMessage
   | EmbedPlatformConnectFailedMessage
+
+const INBOUND_MESSAGE_TYPES = new Set<string>([
+  'studio-embed/v1/config',
+  'studio-embed/v1/facebook-pages',
+  'studio-embed/v1/platform-connected',
+  'studio-embed/v1/platform-connect-failed',
+])
 
 export function isEmbedInboundMessage(data: unknown): data is EmbedInboundMessage {
   if (!data || typeof data !== 'object') return false
   const type = (data as { type?: unknown }).type
-  return typeof type === 'string' && type.startsWith(STUDIO_EMBED_PROTOCOL_PREFIX)
+  return typeof type === 'string' && INBOUND_MESSAGE_TYPES.has(type)
 }
 
 export function createEmbedRequestId(): string {
