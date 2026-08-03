@@ -24,6 +24,7 @@ import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
 import { useIsDrawerMode } from '@/hooks/useBreakpoint'
 import { useTenant } from '@/context/TenantProvider'
+import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
 import { applyActiveScenePreviewState } from '@/lib/applyActiveScenePreview'
@@ -39,8 +40,10 @@ import {
   formatStreamDestinationSummary,
   getStreamableDestinations,
   hasTwitchStreamDestination,
+  refreshFacebookStreamKeys,
   refreshTwitchStreamKeys,
   toStreamDestinationInputs,
+  willStreamToFacebook,
 } from '@/lib/streamDestinations'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
@@ -57,6 +60,7 @@ interface StudioLayoutProps {
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
   const { configuration, refreshConfiguration, tenantId } = useTenant()
+  const { isEmbedded, requestFacebookLiveRefresh } = useCmsEmbedBridge()
   const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
@@ -403,7 +407,30 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         let resolvedDestinations = destinations
 
         if (tenantId && isPersistenceEnabled()) {
+          const currentStreamable = getStreamableDestinations(
+            savedDestinations,
+            platformConnections,
+          )
+          const shouldRefreshFacebook =
+            isEmbedded && willStreamToFacebook(currentStreamable, resolvedDestinations)
+
           await refreshTwitchStreamKeys(tenantId, platformConnections)
+          if (shouldRefreshFacebook) {
+            try {
+              await refreshFacebookStreamKeys(
+                tenantId,
+                platformConnections,
+                requestFacebookLiveRefresh,
+              )
+            } catch (err) {
+              toast.error(
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to refresh Facebook stream key before going live',
+              )
+              return
+            }
+          }
           await refreshConfiguration()
           const freshConfig = getLocalTenantConfiguration()
           const freshStreamable = getStreamableDestinations(
@@ -462,6 +489,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       tenantId,
       platformConnections,
       refreshConfiguration,
+      savedDestinations,
+      isEmbedded,
+      requestFacebookLiveRefresh,
     ],
   )
 

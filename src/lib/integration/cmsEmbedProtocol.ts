@@ -34,6 +34,21 @@ export interface EmbedSelectFacebookPageMessage {
   pageId: string
 }
 
+export interface FacebookLiveRefreshHints {
+  facebookUserId?: string
+  pageId?: string
+  accountType?: FacebookEmbedTarget
+}
+
+export interface EmbedRefreshFacebookLiveMessage {
+  type: 'studio-embed/v1/refresh-facebook-live'
+  requestId: string
+  tenantId?: string
+  facebookUserId?: string
+  pageId?: string
+  accountType?: FacebookEmbedTarget
+}
+
 export interface EmbedFacebookPageOption {
   id: string
   name: string
@@ -77,6 +92,7 @@ export type EmbedOutboundMessage =
   | EmbedConnectPlatformMessage
   | EmbedCancelPlatformConnectMessage
   | EmbedSelectFacebookPageMessage
+  | EmbedRefreshFacebookLiveMessage
 
 export type EmbedInboundMessage =
   | EmbedConfigMessage

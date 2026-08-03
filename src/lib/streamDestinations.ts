@@ -1,7 +1,12 @@
-import { refreshPlatformConnection } from '@/api/integrations'
+import { refreshPlatformConnection, importPlatformConnectionFromEmbed } from '@/api/integrations'
 import type { StreamDestinationInput } from '@/api/streaming'
 import { DestinationPlatform as Platform } from '@/types/destinations'
 import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
+import type {
+  FacebookLiveRefreshHints,
+  PlatformConnectionPayload,
+} from '@/lib/integration/cmsEmbedProtocol'
+import { mapEmbedPayloadToImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
 
 export const STREAMABLE_CONNECTION_STATUSES = new Set(['connected', 'streaming'])
 
@@ -18,6 +23,42 @@ export function shouldSkipTwitchStreamKeyRefresh(
     CMS_EMBED_SOURCES.has(source)
   )
 }
+
+export function shouldRefreshFacebookStreamKeyOnGoLive(
+  connection: PersistedPlatformConnection,
+): boolean {
+  const source = connection.metadata?.source
+  return (
+    connection.platform === Platform.FACEBOOK &&
+    connection.has_stream_key &&
+    typeof source === 'string' &&
+    CMS_EMBED_SOURCES.has(source)
+  )
+}
+
+function resolveFacebookRefreshHints(
+  connection: PersistedPlatformConnection,
+): FacebookLiveRefreshHints {
+  const metadata = connection.metadata ?? {}
+  const accountTypeRaw = metadata.account_type
+  const accountType =
+    typeof accountTypeRaw === 'string' && accountTypeRaw.toLowerCase() === 'page'
+      ? 'page'
+      : 'profile'
+
+  return {
+    facebookUserId:
+      typeof metadata.facebook_user_id === 'string'
+        ? metadata.facebook_user_id
+        : connection.platform_user_id,
+    pageId: typeof metadata.page_id === 'string' ? metadata.page_id : undefined,
+    accountType,
+  }
+}
+
+export type FacebookLiveRefreshFn = (
+  hints: FacebookLiveRefreshHints,
+) => Promise<PlatformConnectionPayload>
 
 function isStreamableConnection(connection: PersistedPlatformConnection): boolean {
   if (!connection.has_stream_key) return false
@@ -82,6 +123,28 @@ export async function refreshTwitchStreamKeys(
   )
 }
 
+export async function refreshFacebookStreamKeys(
+  tenantId: string,
+  platformConnections: PersistedPlatformConnection[] = [],
+  refreshFn: FacebookLiveRefreshFn,
+): Promise<void> {
+  const facebookConnections = platformConnections.filter(
+    (connection) =>
+      connection.platform === Platform.FACEBOOK &&
+      STREAMABLE_CONNECTION_STATUSES.has(connection.status) &&
+      shouldRefreshFacebookStreamKeyOnGoLive(connection),
+  )
+
+  for (const connection of facebookConnections) {
+    const hints = resolveFacebookRefreshHints(connection)
+    const payload = await refreshFn(hints)
+    await importPlatformConnectionFromEmbed(
+      tenantId,
+      mapEmbedPayloadToImportRequest('facebook', payload),
+    )
+  }
+}
+
 export function getConnectionForDestination(
   destinationId: string,
   platformConnections: PersistedPlatformConnection[] = [],
@@ -93,6 +156,35 @@ export function formatStreamDestinationSummary(destinations: StreamDestinationIn
   if (destinations.length === 0) return 'destinations'
   if (destinations.length === 1) return destinations[0].label?.trim() || 'destination'
   return `${destinations.length} destinations`
+}
+
+export function hasFacebookStreamDestination(destinations: StreamDestinationInput[] = []): boolean {
+  return destinations.some((destination) => {
+    const url = destination.url.toLowerCase()
+    const label = destination.label?.toLowerCase() ?? ''
+    return url.includes('facebook.com') || label.includes('facebook')
+  })
+}
+
+export function willStreamToFacebook(
+  streamableDestinations: PersistedDestination[],
+  selectedDestinations?: StreamDestinationInput[],
+): boolean {
+  const facebookSaved = streamableDestinations.filter(
+    (destination) => destination.platform === Platform.FACEBOOK,
+  )
+  if (facebookSaved.length === 0) return false
+
+  if (!selectedDestinations?.length) {
+    return true
+  }
+
+  const selectedLabels = new Set(
+    selectedDestinations.map((item) => item.label?.trim() || 'Custom'),
+  )
+  return facebookSaved.some((destination) =>
+    selectedLabels.has(destination.label.trim() || destination.platform || 'Custom'),
+  )
 }
 
 export function hasTwitchStreamDestination(destinations: StreamDestinationInput[] = []): boolean {
