@@ -1,5 +1,6 @@
 import { persistenceRequest } from '@/api/persistenceClient'
 import type { PersistedPlatformConnection } from '@/types/persistence'
+import type { PlatformConnectionEmbedImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
 
 export function listPlatformConnections(tenantId: string) {
   return persistenceRequest<PersistedPlatformConnection[]>(
@@ -33,4 +34,18 @@ export function getTwitchAuthorizeUrl(tenantId: string, returnUrl: string) {
     return_url: returnUrl,
   })
   return persistenceRequest<{ authorize_url: string }>(`/oauth/twitch/authorize/?${params}`)
+}
+
+/** Persist CMS embed OAuth result (parent ran OAuth; iframe stores credentials). */
+export function importPlatformConnectionFromEmbed(
+  tenantId: string,
+  body: PlatformConnectionEmbedImportRequest,
+) {
+  return persistenceRequest<PersistedPlatformConnection>(
+    `/tenant/${tenantId}/platform-connections/import/`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  )
 }

@@ -9,11 +9,14 @@ import {
   deletePlatformConnection,
   disconnectPlatformConnection,
   getTwitchAuthorizeUrl,
+  importPlatformConnectionFromEmbed,
   refreshPlatformConnection,
 } from '@/api/integrations'
 import { ApiError } from '@/api/client'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useTenant } from '@/context/TenantProvider'
+import type { EmbedPlatform } from '@/lib/integration/cmsEmbedProtocol'
+import { mapEmbedPayloadToImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
   createTwitchOAuthSession,
@@ -108,32 +111,42 @@ export function useDestinations(options?: UseDestinationsOptions) {
     }
   }, [persistenceEnabled, refreshConfiguration])
 
-  const connectTwitch = useCallback(async () => {
-    if (isEmbedded) {
+  const connectEmbeddedPlatform = useCallback(
+    async (platform: EmbedPlatform) => {
+      if (!persistenceEnabled || !tenantId) {
+        toast.error('Persistence is not enabled')
+        return
+      }
+
       setIsConnecting(true)
       try {
-        const payload = await requestPlatformConnect('twitch', tenantId)
-        const embeddedDestination: ConnectedDestination = {
-          id: `cms-twitch-${payload.platform_login}`,
-          platform: Platform.TWITCH,
-          name: payload.name || payload.platform_login,
-          status: Status.CONNECTED,
-          rtmpUrl: payload.stream_key
-            ? `${payload.rtmp_url.replace(/\/$/, '')}/${payload.stream_key}`
-            : payload.rtmp_url,
-          createdAt: new Date().toISOString(),
-        }
-        setDestinations((prev) => [
-          ...prev.filter((d) => d.platform !== Platform.TWITCH),
-          embeddedDestination,
-        ])
+        const payload = await requestPlatformConnect(platform, tenantId)
+        await importPlatformConnectionFromEmbed(
+          tenantId,
+          mapEmbedPayloadToImportRequest(platform, payload),
+        )
+        await reload()
         options?.onTwitchConnected?.()
-        toast.success('Twitch connected via CMS')
+        const label = platform.charAt(0).toUpperCase() + platform.slice(1)
+        toast.success(`${label} connected via CMS`)
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Twitch connection failed')
+        toast.error(err instanceof Error ? err.message : `${platform} connection failed`)
       } finally {
         setIsConnecting(false)
       }
+    },
+    [
+      persistenceEnabled,
+      tenantId,
+      requestPlatformConnect,
+      reload,
+      options?.onTwitchConnected,
+    ],
+  )
+
+  const connectTwitch = useCallback(async () => {
+    if (isEmbedded) {
+      await connectEmbeddedPlatform('twitch')
       return
     }
 
@@ -195,7 +208,7 @@ export function useDestinations(options?: UseDestinationsOptions) {
     }
   }, [
     isEmbedded,
-    requestPlatformConnect,
+    connectEmbeddedPlatform,
     persistenceEnabled,
     tenantId,
     reload,
@@ -203,12 +216,20 @@ export function useDestinations(options?: UseDestinationsOptions) {
   ])
 
   const connectYouTube = useCallback(async () => {
+    if (isEmbedded) {
+      await connectEmbeddedPlatform('youtube')
+      return
+    }
     toast.info('YouTube integration coming soon')
-  }, [])
+  }, [isEmbedded, connectEmbeddedPlatform])
 
   const connectFacebook = useCallback(async (_target: FacebookTarget) => {
+    if (isEmbedded) {
+      await connectEmbeddedPlatform('facebook')
+      return
+    }
     toast.info('Facebook integration coming soon')
-  }, [])
+  }, [isEmbedded, connectEmbeddedPlatform])
 
   const connectCustomRTMP = useCallback(
     async (values: CustomRTMPFormValues) => {
@@ -289,6 +310,14 @@ export function useDestinations(options?: UseDestinationsOptions) {
         await connectTwitch()
         return
       }
+      if (isEmbedded && destination?.platform === Platform.YOUTUBE) {
+        await connectEmbeddedPlatform('youtube')
+        return
+      }
+      if (isEmbedded && destination?.platform === Platform.FACEBOOK) {
+        await connectEmbeddedPlatform('facebook')
+        return
+      }
 
       if (!persistenceEnabled || !tenantId) {
         setDestinations((prev) =>
@@ -306,7 +335,7 @@ export function useDestinations(options?: UseDestinationsOptions) {
         toast.error(err instanceof ApiError ? err.message : 'Failed to reconnect destination')
       }
     },
-    [connectTwitch, destinations, persistenceEnabled, tenantId, reload],
+    [connectTwitch, connectEmbeddedPlatform, destinations, isEmbedded, persistenceEnabled, tenantId, reload],
   )
 
   return {

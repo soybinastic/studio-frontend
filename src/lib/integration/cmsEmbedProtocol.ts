@@ -27,6 +27,9 @@ export interface PlatformConnectionPayload {
   rtmp_url: string
   stream_key?: string
   access_token?: string
+  refresh_token?: string
+  token_expires_at?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface EmbedPlatformConnectedMessage {
