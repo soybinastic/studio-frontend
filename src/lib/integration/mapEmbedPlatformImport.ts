@@ -31,8 +31,8 @@ export function mapEmbedPayloadToImportRequest(
     rtmp_url: payload.rtmp_url,
     token_expires_at: payload.token_expires_at,
     metadata: {
-      source: 'cms_embed',
       ...(payload.metadata ?? {}),
+      source: 'cms_embed',
     },
   }
 }

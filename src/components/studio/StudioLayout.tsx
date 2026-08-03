@@ -470,13 +470,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
             )
             const manual = resolvedDestinations.filter(
               (item) =>
+                item.url.trim() &&
                 !freshStreamable.some(
                   (saved) =>
                     (saved.label.trim() || saved.platform || 'Custom') ===
                     (item.label?.trim() || 'Custom'),
                 ),
             )
-            resolvedDestinations = [...fromSaved, ...manual]
+            resolvedDestinations = [...fromSaved, ...manual].filter((item) => item.url.trim())
 
             if (manual.length > 0) {
               void persistDestinationsFromStream(manual)

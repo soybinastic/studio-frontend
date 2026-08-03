@@ -150,6 +150,71 @@ export function getStreamableDestinations(
   })
 }
 
+export type GoLiveDestinationKind = 'saved' | 'pending_youtube'
+
+export interface GoLiveDestinationOption {
+  id: string
+  kind: GoLiveDestinationKind
+  label: string
+  platform: Platform
+  destination?: PersistedDestination
+  connection?: PersistedPlatformConnection
+}
+
+/** Connected embed YouTube without a stream key yet (minted on first go-live). */
+export function getPendingYouTubeConnections(
+  platformConnections: PersistedPlatformConnection[] = [],
+): PersistedPlatformConnection[] {
+  return platformConnections.filter(
+    (connection) =>
+      shouldRefreshYouTubeStreamOnGoLive(connection) &&
+      !connection.has_stream_key &&
+      !connection.destination_id,
+  )
+}
+
+/** Saved streamable destinations plus connected YouTube awaiting first go-live refresh. */
+export function getGoLiveDestinationOptions(
+  destinations: PersistedDestination[] = [],
+  platformConnections: PersistedPlatformConnection[] = [],
+): GoLiveDestinationOption[] {
+  const streamable = getStreamableDestinations(destinations, platformConnections)
+
+  const savedOptions: GoLiveDestinationOption[] = streamable.map((destination) => ({
+    id: destination.destination_id,
+    kind: 'saved',
+    label: destination.label.trim() || destination.platform || 'Custom',
+    platform: (destination.platform as Platform) || Platform.CUSTOM_RTMP,
+    destination,
+  }))
+
+  const pendingOptions: GoLiveDestinationOption[] = getPendingYouTubeConnections(
+    platformConnections,
+  ).map((connection) => ({
+    id: `connection:${connection.connection_id}`,
+    kind: 'pending_youtube',
+    label: connection.name.trim() || 'YouTube',
+    platform: Platform.YOUTUBE,
+    connection,
+  }))
+
+  return [...savedOptions, ...pendingOptions]
+}
+
+export function goLiveOptionsToStreamInputs(
+  options: GoLiveDestinationOption[],
+): StreamDestinationInput[] {
+  return options.map((option) => {
+    if (option.kind === 'saved' && option.destination) {
+      return {
+        url: option.destination.url.trim(),
+        label: option.label,
+      }
+    }
+    return { url: '', label: option.label }
+  })
+}
+
 export function toStreamDestinationInputs(
   destinations: PersistedDestination[],
 ): StreamDestinationInput[] {

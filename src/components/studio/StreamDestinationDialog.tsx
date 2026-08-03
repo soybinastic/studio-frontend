@@ -23,13 +23,12 @@ import { Badge } from '@/components/ui/badge'
 import { PlatformIcon, getPlatformLabel } from '@/components/destinations/PlatformIcon'
 import type { StreamDestinationInput } from '@/api/streaming'
 import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
-import type { DestinationPlatform } from '@/types/destinations'
-import { DestinationPlatform as Platform } from '@/types/destinations'
 import {
   getConnectionForDestination,
-  getStreamableDestinations,
+  getGoLiveDestinationOptions,
+  goLiveOptionsToStreamInputs,
   maskRtmpUrl,
-  toStreamDestinationInputs,
+  type GoLiveDestinationOption,
 } from '@/lib/streamDestinations'
 import { cn } from '@/lib/utils'
 
@@ -78,14 +77,6 @@ function draftsFromSaved(savedDestinations: PersistedDestination[]): StreamDesti
   )
 }
 
-function resolvePlatform(destination: PersistedDestination): DestinationPlatform {
-  if (destination.platform === Platform.TWITCH) return Platform.TWITCH
-  if (destination.platform === Platform.YOUTUBE) return Platform.YOUTUBE
-  if (destination.platform === Platform.FACEBOOK) return Platform.FACEBOOK
-  if (destination.platform === Platform.CUSTOM_RTMP) return Platform.CUSTOM_RTMP
-  return Platform.CUSTOM_RTMP
-}
-
 export function StreamDestinationDialog({
   open,
   onOpenChange,
@@ -95,11 +86,11 @@ export function StreamDestinationDialog({
   trigger,
 }: StreamDestinationDialogProps) {
   const [streamType, setStreamType] = useState<'RTMP' | 'HLS'>('RTMP')
-  const streamableSaved = getStreamableDestinations(savedDestinations, platformConnections)
-  const hasSavedDestinations = streamableSaved.length > 0
+  const goLiveOptions = getGoLiveDestinationOptions(savedDestinations, platformConnections)
+  const hasGoLiveDestinations = goLiveOptions.length > 0
 
-  const [selectedSavedIds, setSelectedSavedIds] = useState<Set<string>>(
-    () => new Set(streamableSaved.map((d) => d.destination_id)),
+  const [selectedOptionIds, setSelectedOptionIds] = useState<Set<string>>(
+    () => new Set(goLiveOptions.map((option) => option.id)),
   )
   const [manualDestinations, setManualDestinations] = useState<StreamDestinationDraft[]>([])
   const [legacyDestinations, setLegacyDestinations] = useState<StreamDestinationDraft[]>(() =>
@@ -108,19 +99,19 @@ export function StreamDestinationDialog({
 
   useEffect(() => {
     if (!open) return
-    const nextStreamable = getStreamableDestinations(savedDestinations, platformConnections)
-    setSelectedSavedIds(new Set(nextStreamable.map((d) => d.destination_id)))
+    const nextOptions = getGoLiveDestinationOptions(savedDestinations, platformConnections)
+    setSelectedOptionIds(new Set(nextOptions.map((option) => option.id)))
     setManualDestinations([])
     setLegacyDestinations(draftsFromSaved(savedDestinations))
   }, [open, savedDestinations, platformConnections])
 
-  const selectedSaved = streamableSaved.filter((d) => selectedSavedIds.has(d.destination_id))
+  const selectedOptions = goLiveOptions.filter((option) => selectedOptionIds.has(option.id))
   const validManualDestinations = manualDestinations.filter((item) => item.url.trim())
   const validLegacyDestinations = legacyDestinations.filter((item) => item.url.trim())
 
-  const resolvedDestinations = hasSavedDestinations
+  const resolvedDestinations = hasGoLiveDestinations
     ? [
-        ...toStreamDestinationInputs(selectedSaved),
+        ...goLiveOptionsToStreamInputs(selectedOptions),
         ...validManualDestinations.map((item) => ({
           url: item.url.trim(),
           label: item.label.trim() || 'Custom',
@@ -131,16 +122,65 @@ export function StreamDestinationDialog({
         label: item.label.trim() || 'Custom',
       }))
 
-  const toggleSavedDestination = (destinationId: string) => {
-    setSelectedSavedIds((current) => {
+  const toggleGoLiveOption = (optionId: string) => {
+    setSelectedOptionIds((current) => {
       const next = new Set(current)
-      if (next.has(destinationId)) {
-        next.delete(destinationId)
+      if (next.has(optionId)) {
+        next.delete(optionId)
       } else {
-        next.add(destinationId)
+        next.add(optionId)
       }
       return next
     })
+  }
+
+  const renderGoLiveOption = (option: GoLiveDestinationOption) => {
+    const isSelected = selectedOptionIds.has(option.id)
+    const connection =
+      option.kind === 'saved' && option.destination
+        ? getConnectionForDestination(option.destination.destination_id, platformConnections)
+        : option.connection
+
+    return (
+      <label
+        key={option.id}
+        className={cn(
+          'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+          isSelected
+            ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
+            : 'border-border/60 hover:border-primary/30',
+        )}
+      >
+        <input
+          type="checkbox"
+          className="mt-1 h-4 w-4 accent-primary"
+          checked={isSelected}
+          onChange={() => toggleGoLiveOption(option.id)}
+        />
+        <PlatformIcon platform={option.platform} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium">{option.label}</p>
+            <Badge variant="secondary" className="text-[10px]">
+              {getPlatformLabel(option.platform)}
+            </Badge>
+            {option.kind === 'pending_youtube' && (
+              <Badge variant="outline" className="text-[10px]">
+                Ready on go live
+              </Badge>
+            )}
+            {connection?.status === 'streaming' && <Badge variant="live">Streaming</Badge>}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {option.kind === 'pending_youtube'
+              ? 'YouTube stream key will be created when you start streaming'
+              : option.destination
+                ? maskRtmpUrl(option.destination.url)
+                : ''}
+          </p>
+        </div>
+      </label>
+    )
   }
 
   const handleAddManualDestination = () => {
@@ -212,53 +252,10 @@ export function StreamDestinationDialog({
             </Select>
           </div>
 
-          {streamType === 'RTMP' && hasSavedDestinations && (
+          {streamType === 'RTMP' && hasGoLiveDestinations && (
             <div className="space-y-3">
               <Label>Connected destinations</Label>
-              <div className="space-y-2">
-                {streamableSaved.map((destination) => {
-                  const connection = getConnectionForDestination(
-                    destination.destination_id,
-                    platformConnections,
-                  )
-                  const platform = resolvePlatform(destination)
-                  const isSelected = selectedSavedIds.has(destination.destination_id)
-
-                  return (
-                    <label
-                      key={destination.destination_id}
-                      className={cn(
-                        'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
-                        isSelected
-                          ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
-                          : 'border-border/60 hover:border-primary/30',
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 accent-primary"
-                        checked={isSelected}
-                        onChange={() => toggleSavedDestination(destination.destination_id)}
-                      />
-                      <PlatformIcon platform={platform} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium">{destination.label || getPlatformLabel(platform)}</p>
-                          <Badge variant="secondary" className="text-[10px]">
-                            {getPlatformLabel(platform)}
-                          </Badge>
-                          {connection?.status === 'streaming' && (
-                            <Badge variant="live">Streaming</Badge>
-                          )}
-                        </div>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {maskRtmpUrl(destination.url)}
-                        </p>
-                      </div>
-                    </label>
-                  )
-                })}
-              </div>
+              <div className="space-y-2">{goLiveOptions.map(renderGoLiveOption)}</div>
 
               <div className="flex items-center justify-between">
                 <Label>Add one-time destination</Label>
@@ -321,7 +318,7 @@ export function StreamDestinationDialog({
             </div>
           )}
 
-          {streamType === 'RTMP' && !hasSavedDestinations && (
+          {streamType === 'RTMP' && !hasGoLiveDestinations && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>Destinations</Label>
