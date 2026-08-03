@@ -12,6 +12,7 @@ import { AddSceneModal } from '@/components/studio/scenes/AddSceneModal'
 import { CountdownConfigModal } from '@/components/studio/scenes/CountdownConfigModal'
 import { SceneDevicePickerModal } from '@/components/studio/scenes/SceneDevicePickerModal'
 import { DeviceSetupModal } from '@/components/studio/device-setup/DeviceSetupModal'
+import { YouTubeGoLiveErrorDialog } from '@/components/studio/YouTubeGoLiveErrorDialog'
 import { useDeviceStore } from '@/hooks/useDeviceStore'
 import { hasSceneDevices } from '@/lib/devices'
 import { countdownSecondsRemaining } from '@/lib/countdown'
@@ -48,6 +49,11 @@ import {
   willStreamToYouTube,
 } from '@/lib/streamDestinations'
 import { isEmbedErrorHandledByParent } from '@/lib/integration/cmsEmbedProtocol'
+import {
+  resolveYouTubeGoLiveErrorVariant,
+  shouldShowYouTubeGoLiveDialog,
+  type YouTubeGoLiveErrorVariant,
+} from '@/lib/youtubeGoLiveErrors'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
@@ -70,6 +76,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const [showSceneDevicePicker, setShowSceneDevicePicker] = useState(false)
   const [showAddSceneModal, setShowAddSceneModal] = useState(false)
   const [showCountdownModal, setShowCountdownModal] = useState(false)
+  const [youtubeGoLiveErrorVariant, setYoutubeGoLiveErrorVariant] =
+    useState<YouTubeGoLiveErrorVariant | null>(null)
   const [roomEnabled, setRoomEnabled] = useState(false)
   const [scenesDrawerOpen, setScenesDrawerOpen] = useState(false)
   const [controlsDrawerOpen, setControlsDrawerOpen] = useState(false)
@@ -445,6 +453,10 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 requestYouTubeLiveRefresh,
               )
             } catch (err) {
+              if (shouldShowYouTubeGoLiveDialog(isEmbedded)) {
+                setYoutubeGoLiveErrorVariant(resolveYouTubeGoLiveErrorVariant(err))
+                return
+              }
               if (!isEmbedErrorHandledByParent(err)) {
                 toast.error(
                   err instanceof Error
@@ -636,6 +648,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         cameraScenes={cameraScenes}
         onSave={(duration, targetId) => void handleCountdownSave(duration, targetId)}
         isSaving={sceneStore.isMutating}
+      />
+
+      <YouTubeGoLiveErrorDialog
+        open={youtubeGoLiveErrorVariant !== null}
+        onOpenChange={(open) => {
+          if (!open) setYoutubeGoLiveErrorVariant(null)
+        }}
+        variant={youtubeGoLiveErrorVariant ?? 'live_not_enabled'}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
