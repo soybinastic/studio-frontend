@@ -39,20 +39,16 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     connectDescription: 'Connect your Twitch account to stream live.',
     oauthLabel: 'Continue with Twitch',
   },
-  {
-    id: Platform.CUSTOM_RTMP,
-    name: 'Custom RTMP',
-    description: 'Connect using Stream URL and Stream Key.',
-    brandColor: 'var(--primary)',
-    connectTitle: 'Custom RTMP',
-    connectDescription: 'Enter your RTMP server details to connect a custom destination.',
-    oauthLabel: 'Save',
-  },
 ]
+
+export const OAUTH_PLATFORM_DEFINITIONS = PLATFORM_DEFINITIONS
 
 export const PLATFORM_BY_ID = Object.fromEntries(
   PLATFORM_DEFINITIONS.map((p) => [p.id, p]),
-) as Record<DestinationPlatform, PlatformDefinition>
+) as Record<
+  Exclude<DestinationPlatform, typeof Platform.CUSTOM_RTMP>,
+  PlatformDefinition
+>
 
 export interface StatusDefinition {
   label: string

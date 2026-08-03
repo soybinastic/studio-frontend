@@ -24,7 +24,7 @@ export type FacebookTarget = 'profile' | 'page'
 
 export interface ConnectedDestination {
   id: string
-  platform: DestinationPlatform
+  platform: DestinationPlatform | string
   name: string
   status: DestinationStatus
   facebookTarget?: FacebookTarget

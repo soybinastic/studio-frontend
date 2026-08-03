@@ -1,10 +1,16 @@
 import type { DestinationPlatform } from '@/types/destinations'
 import { DestinationPlatform as Platform } from '@/types/destinations'
+import {
+  getStreamingPlatformBrandColor,
+  getStreamingPlatformLabel,
+  getRtmpPreset,
+  isOAuthDestinationPlatform,
+} from '@/constants/rtmpPlatforms'
 import { PLATFORM_BY_ID } from '@/constants/destinations'
 import { cn } from '@/lib/utils'
 
 interface PlatformIconProps {
-  platform: DestinationPlatform
+  platform: DestinationPlatform | string
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }
@@ -19,6 +25,12 @@ const iconSizeMap = {
   sm: 'h-4 w-4',
   md: 'h-5 w-5',
   lg: 'h-7 w-7',
+} as const
+
+const textSizeMap = {
+  sm: 'text-xs',
+  md: 'text-sm',
+  lg: 'text-lg',
 } as const
 
 function YouTubeIcon({ className }: { className?: string }) {
@@ -54,16 +66,24 @@ function RtmpIcon({ className }: { className?: string }) {
   )
 }
 
-const ICONS: Record<DestinationPlatform, React.ComponentType<{ className?: string }>> = {
+const OAUTH_ICONS: Record<
+  typeof Platform.YOUTUBE | typeof Platform.FACEBOOK | typeof Platform.TWITCH,
+  React.ComponentType<{ className?: string }>
+> = {
   [Platform.YOUTUBE]: YouTubeIcon,
   [Platform.FACEBOOK]: FacebookIcon,
   [Platform.TWITCH]: TwitchIcon,
-  [Platform.CUSTOM_RTMP]: RtmpIcon,
+}
+
+function isOAuthPlatform(platform: string): platform is keyof typeof OAUTH_ICONS {
+  return isOAuthDestinationPlatform(platform)
 }
 
 export function PlatformIcon({ platform, size = 'md', className }: PlatformIconProps) {
-  const def = PLATFORM_BY_ID[platform]
-  const Icon = ICONS[platform]
+  const brandColor = isOAuthPlatform(platform)
+    ? PLATFORM_BY_ID[platform as keyof typeof PLATFORM_BY_ID].brandColor
+    : getStreamingPlatformBrandColor(platform)
+  const preset = getRtmpPreset(platform)
 
   return (
     <div
@@ -72,14 +92,28 @@ export function PlatformIcon({ platform, size = 'md', className }: PlatformIconP
         sizeMap[size],
         className,
       )}
-      style={{ backgroundColor: def.brandColor }}
+      style={{ backgroundColor: brandColor }}
       aria-hidden="true"
     >
-      <Icon className={iconSizeMap[size]} />
+      {isOAuthPlatform(platform) ? (
+        (() => {
+          const Icon = OAUTH_ICONS[platform as keyof typeof OAUTH_ICONS]
+          return Icon ? <Icon className={iconSizeMap[size]} /> : <RtmpIcon className={iconSizeMap[size]} />
+        })()
+      ) : preset ? (
+        <span className={cn('font-bold', textSizeMap[size])}>
+          {preset.name.trim().charAt(0).toUpperCase() || 'R'}
+        </span>
+      ) : (
+        <RtmpIcon className={iconSizeMap[size]} />
+      )}
     </div>
   )
 }
 
-export function getPlatformLabel(platform: DestinationPlatform): string {
-  return PLATFORM_BY_ID[platform].name
+export function getPlatformLabel(platform: DestinationPlatform | string): string {
+  if (isOAuthDestinationPlatform(platform)) {
+    return PLATFORM_BY_ID[platform as keyof typeof PLATFORM_BY_ID].name
+  }
+  return getStreamingPlatformLabel(platform)
 }

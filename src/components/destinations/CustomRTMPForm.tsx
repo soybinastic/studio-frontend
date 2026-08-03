@@ -1,14 +1,16 @@
-import { useState } from 'react'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import type { CustomRTMPFormErrors, CustomRTMPFormValues } from '@/types/destinations'
 import { PlatformIcon } from '@/components/destinations/PlatformIcon'
-import { DestinationPlatform as Platform } from '@/types/destinations'
+import type { RtmpPlatformPreset } from '@/constants/rtmpPlatforms'
+import { CUSTOM_RTMP_PRESET } from '@/constants/rtmpPlatforms'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
 interface CustomRTMPFormProps {
+  preset?: RtmpPlatformPreset
   onSubmit: (values: CustomRTMPFormValues) => void | Promise<void>
   onCancel: () => void
   isSubmitting?: boolean
@@ -30,7 +32,12 @@ function validate(values: CustomRTMPFormValues): CustomRTMPFormErrors {
   return errors
 }
 
-export function CustomRTMPForm({ onSubmit, onCancel, isSubmitting }: CustomRTMPFormProps) {
+export function CustomRTMPForm({
+  preset = CUSTOM_RTMP_PRESET,
+  onSubmit,
+  onCancel,
+  isSubmitting,
+}: CustomRTMPFormProps) {
   const [values, setValues] = useState<CustomRTMPFormValues>({
     displayName: '',
     rtmpUrl: '',
@@ -39,6 +46,17 @@ export function CustomRTMPForm({ onSubmit, onCancel, isSubmitting }: CustomRTMPF
   })
   const [errors, setErrors] = useState<CustomRTMPFormErrors>({})
   const [touched, setTouched] = useState<Partial<Record<keyof CustomRTMPFormValues, boolean>>>({})
+
+  useEffect(() => {
+    setValues({
+      displayName: '',
+      rtmpUrl: '',
+      streamKey: '',
+      notes: '',
+    })
+    setErrors({})
+    setTouched({})
+  }, [preset.id])
 
   const handleBlur = (field: keyof CustomRTMPFormValues) => {
     setTouched((prev) => ({ ...prev, [field]: true }))
@@ -60,20 +78,33 @@ export function CustomRTMPForm({ onSubmit, onCancel, isSubmitting }: CustomRTMPF
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <div className="flex items-center gap-4">
-        <PlatformIcon platform={Platform.CUSTOM_RTMP} size="lg" />
+        <PlatformIcon platform={preset.id} size="lg" />
         <div>
-          <h3 className="text-lg font-semibold">Custom RTMP</h3>
-          <p className="text-sm text-muted-foreground">
-            Enter your RTMP server details to connect a custom destination.
-          </p>
+          <h3 className="text-lg font-semibold">{preset.name}</h3>
+          <p className="text-sm text-muted-foreground">{preset.description}</p>
         </div>
       </div>
+
+      {preset.streamKeyHelpUrl && (
+        <p className="text-sm text-muted-foreground">
+          Need help finding credentials?{' '}
+          <a
+            href={preset.streamKeyHelpUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+          >
+            View setup guide
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </p>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="rtmp-display-name">Display Name</Label>
         <Input
           id="rtmp-display-name"
-          placeholder="My RTMP Server"
+          placeholder={preset.name}
           value={values.displayName}
           onChange={(e) => setValues((v) => ({ ...v, displayName: e.target.value }))}
           onBlur={() => handleBlur('displayName')}
@@ -92,7 +123,7 @@ export function CustomRTMPForm({ onSubmit, onCancel, isSubmitting }: CustomRTMPF
         <Label htmlFor="rtmp-url">RTMP URL</Label>
         <Input
           id="rtmp-url"
-          placeholder="rtmp://live.example.com/app"
+          placeholder={preset.rtmpUrlPlaceholder}
           value={values.rtmpUrl}
           onChange={(e) => setValues((v) => ({ ...v, rtmpUrl: e.target.value }))}
           onBlur={() => handleBlur('rtmpUrl')}
@@ -112,7 +143,7 @@ export function CustomRTMPForm({ onSubmit, onCancel, isSubmitting }: CustomRTMPF
         <Input
           id="rtmp-stream-key"
           type="password"
-          placeholder="Your stream key"
+          placeholder={preset.streamKeyPlaceholder ?? 'Your stream key'}
           value={values.streamKey}
           onChange={(e) => setValues((v) => ({ ...v, streamKey: e.target.value }))}
           onBlur={() => handleBlur('streamKey')}

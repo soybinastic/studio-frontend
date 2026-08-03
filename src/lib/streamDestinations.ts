@@ -5,6 +5,7 @@ import {
   type PlatformEmbedCredentials,
 } from '@/api/integrations'
 import type { StreamDestinationInput } from '@/api/streaming'
+import { isManualRtmpPlatform } from '@/constants/rtmpPlatforms'
 import { DestinationPlatform as Platform } from '@/types/destinations'
 import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
 import type {
@@ -146,7 +147,7 @@ export function getStreamableDestinations(
       return isStreamableConnection(connection)
     }
 
-    return destination.platform === Platform.CUSTOM_RTMP
+    return isManualRtmpPlatform(destination.platform)
   })
 }
 
@@ -156,7 +157,7 @@ export interface GoLiveDestinationOption {
   id: string
   kind: GoLiveDestinationKind
   label: string
-  platform: Platform
+  platform: string
   destination?: PersistedDestination
   connection?: PersistedPlatformConnection
 }
@@ -184,7 +185,7 @@ export function getGoLiveDestinationOptions(
     id: destination.destination_id,
     kind: 'saved',
     label: destination.label.trim() || destination.platform || 'Custom',
-    platform: (destination.platform as Platform) || Platform.CUSTOM_RTMP,
+    platform: destination.platform || Platform.CUSTOM_RTMP,
     destination,
   }))
 

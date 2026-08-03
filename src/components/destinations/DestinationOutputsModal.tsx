@@ -17,15 +17,21 @@ import type {
 import { DestinationPlatform as Platform } from '@/types/destinations'
 import {
   MODAL_STEP_BY_PLATFORM,
+  OAUTH_PLATFORM_DEFINITIONS,
   PLATFORM_BY_ID,
-  PLATFORM_DEFINITIONS,
 } from '@/constants/destinations'
+import {
+  CUSTOM_RTMP_PRESET,
+  RTMP_PLATFORM_PRESETS,
+  type RtmpPlatformPreset,
+} from '@/constants/rtmpPlatforms'
 import type { ConnectFacebookResult, FacebookPagePickerState } from '@/hooks/useDestinations'
 import { PlatformSelector } from '@/components/destinations/PlatformSelector'
 import { PlatformConnectView } from '@/components/destinations/PlatformConnectView'
 import { CustomRTMPForm } from '@/components/destinations/CustomRTMPForm'
 import { DestinationGrid } from '@/components/destinations/DestinationGrid'
 import { EmptyDestinationState } from '@/components/destinations/EmptyDestinationState'
+import { RtmpPlatformCard } from '@/components/destinations/RtmpPlatformCard'
 
 interface DestinationOutputsModalProps {
   open: boolean
@@ -35,7 +41,7 @@ interface DestinationOutputsModalProps {
   connectYouTube: () => void | Promise<void>
   connectFacebook: (target: FacebookTarget) => Promise<ConnectFacebookResult>
   connectTwitch: () => void | Promise<void>
-  connectCustomRTMP: (values: CustomRTMPFormValues) => void | Promise<void>
+  connectCustomRTMP: (values: CustomRTMPFormValues, platformId: string) => void | Promise<void>
   facebookPagePicker?: FacebookPagePickerState | null
   clearFacebookPagePicker?: () => void
   removeDestination: (id: string) => void
@@ -73,10 +79,12 @@ export function DestinationOutputsModal({
 }: DestinationOutputsModalProps) {
   const [step, setStep] = useState<DestinationModalStep>('list')
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
+  const [rtmpPreset, setRtmpPreset] = useState<RtmpPlatformPreset>(CUSTOM_RTMP_PRESET)
 
   const resetToList = useCallback(() => {
     setStep('list')
     setDirection('back')
+    setRtmpPreset(CUSTOM_RTMP_PRESET)
   }, [])
 
   useEffect(() => {
@@ -86,7 +94,6 @@ export function DestinationOutputsModal({
     }
   }, [open, resetToList])
 
-  // Page reconnect from the list runs OAuth on CMS but the picker lives on connect-facebook.
   useEffect(() => {
     if (!open || !facebookPagePicker) return
     if (step === 'connect-facebook') return
@@ -109,12 +116,15 @@ export function DestinationOutputsModal({
     setStep(next)
   }
 
-  const handlePlatformSelect = (platformId: (typeof PLATFORM_DEFINITIONS)[number]['id']) => {
-    if (platformId === Platform.CUSTOM_RTMP) {
-      goToStep('custom-rtmp')
-      return
-    }
-    goToStep(MODAL_STEP_BY_PLATFORM[platformId])
+  const handleOAuthPlatformSelect = (
+    platformId: (typeof OAUTH_PLATFORM_DEFINITIONS)[number]['id'],
+  ) => {
+    goToStep(MODAL_STEP_BY_PLATFORM[platformId as keyof typeof MODAL_STEP_BY_PLATFORM])
+  }
+
+  const handleRtmpPresetSelect = (preset: RtmpPlatformPreset) => {
+    setRtmpPreset(preset)
+    goToStep('custom-rtmp')
   }
 
   const handleBack = () => {
@@ -157,7 +167,7 @@ export function DestinationOutputsModal({
   }
 
   const handleCustomSubmit = async (values: CustomRTMPFormValues) => {
-    await connectCustomRTMP(values)
+    await connectCustomRTMP(values, rtmpPreset.id)
     resetToList()
   }
 
@@ -193,19 +203,19 @@ export function DestinationOutputsModal({
       : step === 'select'
         ? 'Choose Destination'
         : step === 'custom-rtmp'
-          ? 'Custom RTMP'
+          ? rtmpPreset.name
           : platform?.connectTitle ?? 'Connect Destination'
 
   const description =
     step === 'list'
       ? 'Connect streaming destinations to broadcast your live sessions to multiple platforms simultaneously.'
       : step === 'select'
-        ? 'Select a platform to connect your streaming destination.'
+        ? 'Choose an integrated platform or add an RTMP destination with your stream URL and key.'
         : step === 'custom-rtmp'
-          ? 'Configure your custom RTMP server.'
+          ? rtmpPreset.description
           : platform?.connectDescription
 
-  const isWide = step === 'list'
+  const isWide = step === 'list' || step === 'select'
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -246,7 +256,36 @@ export function DestinationOutputsModal({
           )}
 
           {step === 'select' && (
-            <PlatformSelector platforms={PLATFORM_DEFINITIONS} onSelect={handlePlatformSelect} />
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-foreground">Integrated destinations</h3>
+                <PlatformSelector
+                  platforms={OAUTH_PLATFORM_DEFINITIONS}
+                  onSelect={handleOAuthPlatformSelect}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-foreground">RTMP destinations</h3>
+                <div
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                  role="listbox"
+                  aria-label="Choose an RTMP streaming destination"
+                >
+                  {RTMP_PLATFORM_PRESETS.map((preset) => (
+                    <RtmpPlatformCard
+                      key={preset.id}
+                      preset={preset}
+                      onSelect={() => handleRtmpPresetSelect(preset)}
+                    />
+                  ))}
+                  <RtmpPlatformCard
+                    preset={CUSTOM_RTMP_PRESET}
+                    onSelect={() => handleRtmpPresetSelect(CUSTOM_RTMP_PRESET)}
+                  />
+                </div>
+              </div>
+            </div>
           )}
 
           {platform && (
@@ -262,6 +301,7 @@ export function DestinationOutputsModal({
 
           {step === 'custom-rtmp' && (
             <CustomRTMPForm
+              preset={rtmpPreset}
               onSubmit={handleCustomSubmit}
               onCancel={handleBack}
               isSubmitting={isConnecting}

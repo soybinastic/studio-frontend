@@ -40,6 +40,7 @@ import type {
   FacebookTarget,
 } from '@/types/destinations'
 import { DestinationPlatform as Platform, DestinationStatus as Status } from '@/types/destinations'
+import { isManualRtmpPlatform, isOAuthDestinationPlatform, getStreamingPlatformLabel } from '@/constants/rtmpPlatforms'
 import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
 
 function mapPlatformConnection(connection: PersistedPlatformConnection): ConnectedDestination {
@@ -64,8 +65,8 @@ function mapPlatformConnection(connection: PersistedPlatformConnection): Connect
 function mapCustomDestination(destination: PersistedDestination): ConnectedDestination {
   return {
     id: destination.destination_id,
-    platform: Platform.CUSTOM_RTMP,
-    name: destination.label || 'Custom RTMP',
+    platform: destination.platform || Platform.CUSTOM_RTMP,
+    name: destination.label || getStreamingPlatformLabel(destination.platform || Platform.CUSTOM_RTMP),
     status: Status.CONNECTED,
     rtmpUrl: destination.url,
     createdAt: destination.created_at,
@@ -85,11 +86,8 @@ function buildDestinationsFromConfig(
   const customDestinations = persistedDestinations
     .filter(
       (d) =>
-        d.platform === Platform.CUSTOM_RTMP ||
-        (!linkedDestinationIds.has(d.destination_id) &&
-          d.platform !== Platform.TWITCH &&
-          d.platform !== Platform.YOUTUBE &&
-          d.platform !== Platform.FACEBOOK),
+        isManualRtmpPlatform(d.platform) ||
+        (!linkedDestinationIds.has(d.destination_id) && !isOAuthDestinationPlatform(d.platform)),
     )
     .map(mapCustomDestination)
 
@@ -376,7 +374,7 @@ export function useDestinations(options?: UseDestinationsOptions) {
   )
 
   const connectCustomRTMP = useCallback(
-    async (values: CustomRTMPFormValues) => {
+    async (values: CustomRTMPFormValues, platformId: string = Platform.CUSTOM_RTMP) => {
       if (!persistenceEnabled || !tenantId) {
         toast.error('Persistence is not enabled')
         return
@@ -385,15 +383,16 @@ export function useDestinations(options?: UseDestinationsOptions) {
       setIsConnecting(true)
       const rtmpUrl = values.rtmpUrl.trim().replace(/\/$/, '')
       const fullUrl = `${rtmpUrl}/${values.streamKey.trim()}`
+      const label = values.displayName.trim() || getStreamingPlatformLabel(platformId)
 
       try {
         await createPersistedDestination(tenantId, {
-          label: values.displayName.trim(),
+          label,
           url: fullUrl,
-          platform: Platform.CUSTOM_RTMP,
+          platform: platformId,
         })
         await reload()
-        toast.success(`${values.displayName} saved`)
+        toast.success(`${label} saved`)
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : 'Failed to save RTMP destination')
       } finally {

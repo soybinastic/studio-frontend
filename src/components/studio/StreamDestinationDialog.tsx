@@ -32,13 +32,7 @@ import {
 } from '@/lib/streamDestinations'
 import { cn } from '@/lib/utils'
 
-const RTMP_PLATFORM_PRESETS = [
-  { label: 'Twitch', placeholder: 'rtmp://live.twitch.tv/app/<stream-key>' },
-  { label: 'YouTube', placeholder: 'rtmp://a.rtmp.youtube.com/live2/<stream-key>' },
-  { label: 'Facebook', placeholder: 'rtmps://live-api-s.facebook.com:443/rtmp/<stream-key>' },
-  { label: 'TikTok', placeholder: 'rtmp://push.tiktok.com/live/<stream-key>' },
-  { label: 'Custom', placeholder: 'rtmp://live.example.com/app/stream-key' },
-] as const
+import { GO_LIVE_MANUAL_RTMP_PRESETS } from '@/constants/rtmpPlatforms'
 
 interface StreamDestinationDraft {
   id: string
@@ -267,8 +261,8 @@ export function StreamDestinationDialog({
 
               {manualDestinations.map((destination, index) => {
                 const preset =
-                  RTMP_PLATFORM_PRESETS.find((item) => item.label === destination.label) ??
-                  RTMP_PLATFORM_PRESETS[RTMP_PLATFORM_PRESETS.length - 1]
+                  GO_LIVE_MANUAL_RTMP_PRESETS.find((item) => item.label === destination.label) ??
+                  GO_LIVE_MANUAL_RTMP_PRESETS[GO_LIVE_MANUAL_RTMP_PRESETS.length - 1]
 
                 return (
                   <div
@@ -298,7 +292,7 @@ export function StreamDestinationDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {RTMP_PLATFORM_PRESETS.map((item) => (
+                        {GO_LIVE_MANUAL_RTMP_PRESETS.map((item) => (
                           <SelectItem key={item.label} value={item.label}>
                             {item.label}
                           </SelectItem>
@@ -330,8 +324,8 @@ export function StreamDestinationDialog({
 
               {legacyDestinations.map((destination, index) => {
                 const preset =
-                  RTMP_PLATFORM_PRESETS.find((item) => item.label === destination.label) ??
-                  RTMP_PLATFORM_PRESETS[RTMP_PLATFORM_PRESETS.length - 1]
+                  GO_LIVE_MANUAL_RTMP_PRESETS.find((item) => item.label === destination.label) ??
+                  GO_LIVE_MANUAL_RTMP_PRESETS[GO_LIVE_MANUAL_RTMP_PRESETS.length - 1]
 
                 return (
                   <div
@@ -363,7 +357,7 @@ export function StreamDestinationDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {RTMP_PLATFORM_PRESETS.map((item) => (
+                        {GO_LIVE_MANUAL_RTMP_PRESETS.map((item) => (
                           <SelectItem key={item.label} value={item.label}>
                             {item.label}
                           </SelectItem>
