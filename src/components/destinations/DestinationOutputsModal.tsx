@@ -86,6 +86,14 @@ export function DestinationOutputsModal({
     }
   }, [open, resetToList])
 
+  // Page reconnect from the list runs OAuth on CMS but the picker lives on connect-facebook.
+  useEffect(() => {
+    if (!open || !facebookPagePicker) return
+    if (step === 'connect-facebook') return
+    setDirection('forward')
+    setStep('connect-facebook')
+  }, [open, facebookPagePicker, step])
+
   const goToStep = (next: DestinationModalStep) => {
     const stepOrder: DestinationModalStep[] = [
       'list',
@@ -153,6 +161,28 @@ export function DestinationOutputsModal({
     resetToList()
   }
 
+  const handleReconnect = (id: string) => {
+    const destination = destinations.find((d) => d.id === id)
+    if (destination?.platform === Platform.FACEBOOK) {
+      goToStep('connect-facebook')
+    } else if (destination?.platform === Platform.TWITCH) {
+      goToStep('connect-twitch')
+    } else if (destination?.platform === Platform.YOUTUBE) {
+      goToStep('connect-youtube')
+    }
+    reconnectDestination(id)
+  }
+
+  const facebookPagePickerForView = facebookPagePicker
+    ? {
+        ...facebookPagePicker,
+        cancel: () => {
+          facebookPagePicker.cancel()
+          resetToList()
+        },
+      }
+    : null
+
   const platform = stepToPlatform(step)
   const animationClass =
     direction === 'forward' ? 'destination-animate-forward' : 'destination-animate-back'
@@ -206,7 +236,7 @@ export function DestinationOutputsModal({
               <DestinationGrid
                 destinations={destinations}
                 onDisconnect={disconnectDestination}
-                onReconnect={reconnectDestination}
+                onReconnect={handleReconnect}
                 onRemove={removeDestination}
                 emptyState={
                   <EmptyDestinationState onConnect={() => goToStep('select')} />
@@ -225,7 +255,7 @@ export function DestinationOutputsModal({
               onBack={handleBack}
               onConnect={handleOAuthConnect}
               isConnecting={isConnecting}
-              facebookPagePicker={facebookPagePicker}
+              facebookPagePicker={facebookPagePickerForView}
               onFacebookPageConnected={resetToList}
             />
           )}
