@@ -130,11 +130,38 @@ export interface EmbedPlatformConnectedMessage {
   payload: PlatformConnectionPayload
 }
 
+export type EmbedPlatformConnectErrorCode =
+  | 'liveStreamingNotEnabled'
+  | 'quotaExceeded'
+  | 'invalidCredentials'
+
 export interface EmbedPlatformConnectFailedMessage {
   type: 'studio-embed/v1/platform-connect-failed'
   requestId: string
   platform: EmbedPlatform
   error: string
+  errorCode?: EmbedPlatformConnectErrorCode
+}
+
+export class EmbedConnectError extends Error {
+  errorCode?: EmbedPlatformConnectErrorCode
+
+  constructor(message: string, errorCode?: EmbedPlatformConnectErrorCode) {
+    super(message)
+    this.name = 'EmbedConnectError'
+    this.errorCode = errorCode
+  }
+}
+
+export function isEmbedErrorHandledByParent(err: unknown): boolean {
+  if (err instanceof EmbedConnectError && err.errorCode) {
+    return true
+  }
+  if (err && typeof err === 'object' && 'errorCode' in err) {
+    const code = (err as { errorCode?: unknown }).errorCode
+    return typeof code === 'string' && code.length > 0
+  }
+  return false
 }
 
 export type EmbedOutboundMessage =

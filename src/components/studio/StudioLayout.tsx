@@ -47,6 +47,7 @@ import {
   willStreamToFacebook,
   willStreamToYouTube,
 } from '@/lib/streamDestinations'
+import { isEmbedErrorHandledByParent } from '@/lib/integration/cmsEmbedProtocol'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
@@ -444,11 +445,13 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 requestYouTubeLiveRefresh,
               )
             } catch (err) {
-              toast.error(
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to refresh YouTube stream key before going live',
-              )
+              if (!isEmbedErrorHandledByParent(err)) {
+                toast.error(
+                  err instanceof Error
+                    ? err.message
+                    : 'Failed to refresh YouTube stream key before going live',
+                )
+              }
               return
             }
           }

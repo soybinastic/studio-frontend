@@ -22,6 +22,7 @@ import {
   type FacebookLiveRefreshHints,
   type YouTubeLiveRefreshHints,
   type PlatformConnectionPayload,
+  EmbedConnectError,
 } from '@/lib/integration/cmsEmbedProtocol'
 import {
   getEmbedParentOrigins,
@@ -298,11 +299,15 @@ export function CmsEmbedBridgeProvider({
           break
         }
         case 'studio-embed/v1/platform-connect-failed': {
+          const embedError = new EmbedConnectError(
+            event.data.error || 'Embed platform request failed',
+            event.data.errorCode,
+          )
           const refreshPending = pendingRefreshRef.current.get(event.data.requestId)
           if (refreshPending) {
             if (refreshPending.generation !== refreshGenerationRef.current) return
             clearPendingRefresh(event.data.requestId)
-            refreshPending.reject(new Error(event.data.error || 'Embed live refresh failed'))
+            refreshPending.reject(embedError)
             break
           }
 
@@ -311,7 +316,7 @@ export function CmsEmbedBridgeProvider({
             if (pending.generation !== connectGenerationRef.current) return
             clearPendingConnect(event.data.requestId)
             activeRequestIdRef.current = null
-            pending.reject(new Error(event.data.error || 'Platform connection failed'))
+            pending.reject(embedError)
           }
 
           const facebookSession = facebookPagesRef.current
@@ -319,7 +324,7 @@ export function CmsEmbedBridgeProvider({
             if (facebookSession.generation !== connectGenerationRef.current) return
             clearFacebookPagesSession()
             activeRequestIdRef.current = null
-            facebookSession.rejectSelect(new Error(event.data.error || 'Facebook connection failed'))
+            facebookSession.rejectSelect(embedError)
           }
           break
         }
