@@ -5,6 +5,26 @@ import type { PersistedDestination, PersistedPlatformConnection } from '@/types/
 
 export const STREAMABLE_CONNECTION_STATUSES = new Set(['connected', 'streaming'])
 
+const CMS_EMBED_SOURCES = new Set(['cms_oauth', 'cms_embed'])
+
+export function shouldSkipTwitchStreamKeyRefresh(
+  connection: PersistedPlatformConnection,
+): boolean {
+  const source = connection.metadata?.source
+  return (
+    connection.platform === Platform.TWITCH &&
+    connection.has_stream_key &&
+    typeof source === 'string' &&
+    CMS_EMBED_SOURCES.has(source)
+  )
+}
+
+function isStreamableConnection(connection: PersistedPlatformConnection): boolean {
+  if (!connection.has_stream_key) return false
+  if (STREAMABLE_CONNECTION_STATUSES.has(connection.status)) return true
+  return connection.status === 'error' && shouldSkipTwitchStreamKeyRefresh(connection)
+}
+
 export function getStreamableDestinations(
   destinations: PersistedDestination[] = [],
   platformConnections: PersistedPlatformConnection[] = [],
@@ -21,7 +41,7 @@ export function getStreamableDestinations(
 
     const connection = connectionByDestinationId.get(destination.destination_id)
     if (connection) {
-      return STREAMABLE_CONNECTION_STATUSES.has(connection.status) && connection.has_stream_key
+      return isStreamableConnection(connection)
     }
 
     return destination.platform === Platform.CUSTOM_RTMP
@@ -51,7 +71,8 @@ export async function refreshTwitchStreamKeys(
   const twitchConnections = platformConnections.filter(
     (connection) =>
       connection.platform === Platform.TWITCH &&
-      STREAMABLE_CONNECTION_STATUSES.has(connection.status),
+      STREAMABLE_CONNECTION_STATUSES.has(connection.status) &&
+      !shouldSkipTwitchStreamKeyRefresh(connection),
   )
 
   await Promise.all(
