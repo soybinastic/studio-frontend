@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Image, Music2, Plus, Users } from 'lucide-react'
+import { Image, MessageSquare, Music2, Plus, Users } from 'lucide-react'
 import { BackgroundMusicPanel } from '@/components/studio/audio/BackgroundMusicPanel'
+import { ChatPanel } from '@/components/studio/chat/ChatPanel'
 import { GraphicsPanel } from '@/components/studio/sidebar/GraphicsPanel'
 import { SourceTileList } from '@/components/studio/sidebar/SourceTileList'
 import { SourceCard, SOURCE_TYPES } from '@/components/studio/sidebar/SourceCard'
@@ -12,7 +13,11 @@ import type { LayoutType } from '@/types/session'
 import type { SidebarTab } from '@/types/studio'
 import type { StudioTileSource } from '@/types/participants'
 import type { GraphicLayerKey, GraphicsState } from '@/types/graphics'
+import type { ParticipantMedia } from '@/types/session'
+import type { useStudioChat } from '@/hooks/useStudioChat'
 import { cn } from '@/lib/utils'
+
+type StudioChatStore = ReturnType<typeof useStudioChat>
 
 interface StudioSidebarProps {
   layout: LayoutType
@@ -47,6 +52,11 @@ interface StudioSidebarProps {
   isSyncing?: boolean
   drawerOpen?: boolean
   onDrawerOpenChange?: (open: boolean) => void
+  sessionId?: string
+  currentUserId?: string
+  hostPeerId?: string
+  participants?: ParticipantMedia[]
+  chat?: StudioChatStore
 }
 
 const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
@@ -54,6 +64,7 @@ const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
   { id: 'participants', label: 'People', icon: Users },
   { id: 'sources', label: 'Sources', icon: Plus },
   { id: 'audio', label: 'Audio', icon: Music2 },
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
 ]
 
 function SidebarTabs({
@@ -109,6 +120,11 @@ export function StudioSidebar({
   isSyncing,
   drawerOpen = false,
   onDrawerOpenChange,
+  sessionId,
+  currentUserId,
+  hostPeerId,
+  participants = [],
+  chat,
 }: StudioSidebarProps) {
   const drawerMode = useIsDrawerMode()
   const defaultExpanded = usePanelDefaultExpanded()
@@ -176,6 +192,16 @@ export function StudioSidebar({
 
           {activeTab === 'audio' && (
             <BackgroundMusicPanel isHost={isHost} store={backgroundMusicStore} />
+          )}
+
+          {activeTab === 'chat' && chat && sessionId && currentUserId && hostPeerId && (
+            <ChatPanel
+              isHost={isHost}
+              currentUserId={currentUserId}
+              hostPeerId={hostPeerId}
+              participants={participants}
+              chat={chat}
+            />
           )}
         </div>
       ) : (
