@@ -28,11 +28,23 @@ import {
   isAllowedEmbedParentOrigin,
   isEmbeddedIntegration,
 } from '@/lib/integration/integrationMode'
+import {
+  navigateYouTubeOAuthPopup,
+  openYouTubeOAuthPopup,
+  waitForYouTubeOAuthPopup,
+} from '@/lib/integration/youtubeEmbedOAuthPopup'
+import type { EmbedYouTubeOAuthCodeMessage } from '@/lib/integration/cmsEmbedProtocol'
 
 const CONNECT_TIMEOUT_MS = 120_000
 const FACEBOOK_PAGE_TIMEOUT_MS = 5 * 60 * 1000
 const FACEBOOK_REFRESH_TIMEOUT_MS = 60_000
 const YOUTUBE_REFRESH_TIMEOUT_MS = 90_000
+
+interface PendingYouTubePopup {
+  requestId: string
+  popup: Window
+  generation: number
+}
 
 interface PendingConnect {
   resolve: (payload: PlatformConnectionPayload) => void
@@ -115,6 +127,7 @@ export function CmsEmbedBridgeProvider({
   const pendingRef = useRef<Map<string, PendingConnect>>(new Map())
   const pendingRefreshRef = useRef<Map<string, PendingEmbedRefresh>>(new Map())
   const facebookPagesRef = useRef<PendingFacebookPages | null>(null)
+  const youtubePopupRef = useRef<PendingYouTubePopup | null>(null)
   const connectGenerationRef = useRef(0)
   const refreshGenerationRef = useRef(0)
   const activeRequestIdRef = useRef<string | null>(null)
@@ -140,6 +153,15 @@ export function CmsEmbedBridgeProvider({
     facebookPagesRef.current = null
   }, [])
 
+  const clearYouTubePopupSession = useCallback(() => {
+    const session = youtubePopupRef.current
+    if (!session) return
+    if (!session.popup.closed) {
+      session.popup.close()
+    }
+    youtubePopupRef.current = null
+  }, [])
+
   const cancelActivePlatformConnect = useCallback(() => {
     connectGenerationRef.current += 1
     const requestId = activeRequestIdRef.current
@@ -162,7 +184,40 @@ export function CmsEmbedBridgeProvider({
       clearFacebookPagesSession()
       facebookSession.rejectSelect(new Error('Facebook page selection cancelled'))
     }
-  }, [clearFacebookPagesSession, clearPendingConnect])
+
+    clearYouTubePopupSession()
+  }, [clearFacebookPagesSession, clearPendingConnect, clearYouTubePopupSession])
+
+  const completeYouTubePopupOAuth = useCallback(
+    async (session: PendingYouTubePopup) => {
+      try {
+        const { code, state } = await waitForYouTubeOAuthPopup(
+          session.popup,
+          isAllowedEmbedParentOrigin,
+        )
+
+        const message: EmbedYouTubeOAuthCodeMessage = {
+          type: 'studio-embed/v1/youtube-oauth-code',
+          requestId: session.requestId,
+          code,
+          state,
+        }
+        postToParent(message)
+      } catch (err) {
+        const pending = pendingRef.current.get(session.requestId)
+        if (pending && pending.generation === session.generation) {
+          clearPendingConnect(session.requestId)
+          activeRequestIdRef.current = null
+          pending.reject(err instanceof Error ? err : new Error('YouTube connection failed'))
+        }
+      } finally {
+        if (youtubePopupRef.current?.requestId === session.requestId) {
+          youtubePopupRef.current = null
+        }
+      }
+    },
+    [clearPendingConnect],
+  )
 
   useEffect(() => {
     if (!isEmbedded) return
@@ -205,6 +260,15 @@ export function CmsEmbedBridgeProvider({
 
           session.pages = event.data.pages
           session.accountName = event.data.accountName
+          break
+        }
+        case 'studio-embed/v1/youtube-oauth-url': {
+          const session = youtubePopupRef.current
+          if (!session || session.requestId !== event.data.requestId) return
+          if (session.generation !== connectGenerationRef.current) return
+
+          navigateYouTubeOAuthPopup(session.popup, event.data.authUrl)
+          void completeYouTubePopupOAuth(session)
           break
         }
         case 'studio-embed/v1/platform-connected': {
@@ -266,10 +330,20 @@ export function CmsEmbedBridgeProvider({
 
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [cancelActivePlatformConnect, clearFacebookPagesSession, clearPendingConnect, clearPendingRefresh, isEmbedded])
+  }, [
+    cancelActivePlatformConnect,
+    clearFacebookPagesSession,
+    clearPendingConnect,
+    clearPendingRefresh,
+    completeYouTubePopupOAuth,
+    isEmbedded,
+  ])
 
   const beginConnectSession = useCallback(
-    (platform: EmbedPlatform, options?: PlatformConnectOptions) => {
+    (
+      platform: EmbedPlatform,
+      options?: PlatformConnectOptions & { youtubeFallbackRedirect?: boolean },
+    ) => {
       cancelActivePlatformConnect()
       const generation = connectGenerationRef.current
       const requestId = createEmbedRequestId()
@@ -281,6 +355,7 @@ export function CmsEmbedBridgeProvider({
         platform,
         tenantId: tenantId ?? undefined,
         facebookTarget: options?.facebookTarget,
+        youtubeFallbackRedirect: options?.youtubeFallbackRedirect,
       }
 
       const connectPromise = new Promise<PlatformConnectionPayload>((resolve, reject) => {
@@ -318,17 +393,76 @@ export function CmsEmbedBridgeProvider({
     [cancelActivePlatformConnect, clearPendingConnect, tenantId],
   )
 
+  const requestYouTubePlatformConnect = useCallback(
+    (connectTenantId?: string | null) => {
+      if (!isEmbedded) {
+        return Promise.reject(new Error('CMS embed bridge is only available in embedded mode'))
+      }
+
+      cancelActivePlatformConnect()
+
+      const popup = openYouTubeOAuthPopup()
+      const generation = connectGenerationRef.current
+      const requestId = createEmbedRequestId()
+      activeRequestIdRef.current = requestId
+
+      const connectPromise = new Promise<PlatformConnectionPayload>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          if (!pendingRef.current.has(requestId)) return
+          if (connectGenerationRef.current !== generation) return
+          clearPendingConnect(requestId)
+          activeRequestIdRef.current = null
+          clearYouTubePopupSession()
+          reject(new Error('YouTube connection timed out'))
+        }, CONNECT_TIMEOUT_MS)
+
+        pendingRef.current.set(requestId, {
+          resolve,
+          reject,
+          platform: 'youtube',
+          generation,
+          timeoutId,
+        })
+      })
+
+      if (popup) {
+        youtubePopupRef.current = { requestId, popup, generation }
+        postToParent({
+          type: 'studio-embed/v1/connect-platform',
+          requestId,
+          platform: 'youtube',
+          tenantId: connectTenantId ?? tenantId ?? undefined,
+        })
+      } else {
+        postToParent({
+          type: 'studio-embed/v1/connect-platform',
+          requestId,
+          platform: 'youtube',
+          tenantId: connectTenantId ?? tenantId ?? undefined,
+          youtubeFallbackRedirect: true,
+        })
+      }
+
+      return connectPromise
+    },
+    [cancelActivePlatformConnect, clearPendingConnect, clearYouTubePopupSession, isEmbedded, tenantId],
+  )
+
   const requestPlatformConnect = useCallback(
     (platform: EmbedPlatform, connectTenantId?: string | null, options?: PlatformConnectOptions) => {
       if (!isEmbedded) {
         return Promise.reject(new Error('CMS embed bridge is only available in embedded mode'))
       }
 
+      if (platform === 'youtube') {
+        return requestYouTubePlatformConnect(connectTenantId)
+      }
+
       void connectTenantId
       const { connectPromise } = beginConnectSession(platform, options)
       return connectPromise
     },
-    [beginConnectSession, isEmbedded],
+    [beginConnectSession, isEmbedded, requestYouTubePlatformConnect],
   )
 
   const waitForFacebookPages = useCallback(

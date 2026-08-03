@@ -217,9 +217,7 @@ export function useDestinations(options?: UseDestinationsOptions) {
         const label = platform.charAt(0).toUpperCase() + platform.slice(1)
         toast.success(`${label} connected via CMS`)
       } catch (err) {
-        if (platform !== 'youtube') {
-          clearEmbedYouTubeConnectAwaiting()
-        }
+        clearEmbedYouTubeConnectAwaiting()
         toast.error(err instanceof Error ? err.message : `${platform} connection failed`)
       } finally {
         setIsConnecting(false)

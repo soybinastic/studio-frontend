@@ -21,6 +21,15 @@ export interface EmbedConnectPlatformMessage {
   tenantId?: string
   platform: EmbedPlatform
   facebookTarget?: FacebookEmbedTarget
+  /** When true, CMS uses full-page redirect (popup was blocked in iframe). */
+  youtubeFallbackRedirect?: boolean
+}
+
+export interface EmbedYouTubeOAuthCodeMessage {
+  type: 'studio-embed/v1/youtube-oauth-code'
+  requestId: string
+  code: string
+  state?: string
 }
 
 export interface EmbedCancelPlatformConnectMessage {
@@ -96,6 +105,12 @@ export interface EmbedFacebookPagesMessage {
   accountName?: string
 }
 
+export interface EmbedYouTubeOAuthUrlMessage {
+  type: 'studio-embed/v1/youtube-oauth-url'
+  requestId: string
+  authUrl: string
+}
+
 export interface PlatformConnectionPayload {
   name: string
   platform_login: string
@@ -129,16 +144,19 @@ export type EmbedOutboundMessage =
   | EmbedSelectFacebookPageMessage
   | EmbedRefreshFacebookLiveMessage
   | EmbedRefreshYouTubeLiveMessage
+  | EmbedYouTubeOAuthCodeMessage
 
 export type EmbedInboundMessage =
   | EmbedConfigMessage
   | EmbedFacebookPagesMessage
+  | EmbedYouTubeOAuthUrlMessage
   | EmbedPlatformConnectedMessage
   | EmbedPlatformConnectFailedMessage
 
 const INBOUND_MESSAGE_TYPES = new Set<string>([
   'studio-embed/v1/config',
   'studio-embed/v1/facebook-pages',
+  'studio-embed/v1/youtube-oauth-url',
   'studio-embed/v1/platform-connected',
   'studio-embed/v1/platform-connect-failed',
 ])
