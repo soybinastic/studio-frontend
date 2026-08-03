@@ -1,4 +1,9 @@
-import { refreshPlatformConnection, importPlatformConnectionFromEmbed } from '@/api/integrations'
+import {
+  refreshPlatformConnection,
+  importPlatformConnectionFromEmbed,
+  getFacebookEmbedCredentials,
+  type FacebookEmbedCredentials,
+} from '@/api/integrations'
 import type { StreamDestinationInput } from '@/api/streaming'
 import { DestinationPlatform as Platform } from '@/types/destinations'
 import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
@@ -36,23 +41,38 @@ export function shouldRefreshFacebookStreamKeyOnGoLive(
   )
 }
 
-function resolveFacebookRefreshHints(
+function buildFacebookRefreshHints(
   connection: PersistedPlatformConnection,
+  credentials: FacebookEmbedCredentials,
 ): FacebookLiveRefreshHints {
-  const metadata = connection.metadata ?? {}
+  const metadata = {
+    ...(connection.metadata ?? {}),
+    ...(credentials.metadata ?? {}),
+  }
   const accountTypeRaw = metadata.account_type
   const accountType =
     typeof accountTypeRaw === 'string' && accountTypeRaw.toLowerCase() === 'page'
       ? 'page'
       : 'profile'
+  const pageId = typeof metadata.page_id === 'string' ? metadata.page_id : undefined
+  const facebookUserId =
+    typeof metadata.facebook_user_id === 'string'
+      ? metadata.facebook_user_id
+      : connection.platform_user_id
+
+  const streamingTargetId =
+    accountType === 'page' && pageId
+      ? pageId
+      : credentials.platform_user_id || connection.platform_user_id
 
   return {
-    facebookUserId:
-      typeof metadata.facebook_user_id === 'string'
-        ? metadata.facebook_user_id
-        : connection.platform_user_id,
-    pageId: typeof metadata.page_id === 'string' ? metadata.page_id : undefined,
+    accessToken: credentials.access_token,
+    streamingTargetId,
     accountType,
+    facebookUserId,
+    pageId,
+    accountName: credentials.name || connection.name,
+    platformLogin: credentials.platform_login || connection.platform_login,
   }
 }
 
@@ -136,7 +156,8 @@ export async function refreshFacebookStreamKeys(
   )
 
   for (const connection of facebookConnections) {
-    const hints = resolveFacebookRefreshHints(connection)
+    const credentials = await getFacebookEmbedCredentials(tenantId, connection.connection_id)
+    const hints = buildFacebookRefreshHints(connection, credentials)
     const payload = await refreshFn(hints)
     await importPlatformConnectionFromEmbed(
       tenantId,

@@ -35,18 +35,28 @@ export interface EmbedSelectFacebookPageMessage {
 }
 
 export interface FacebookLiveRefreshHints {
+  accessToken: string
+  streamingTargetId: string
+  accountType?: FacebookEmbedTarget
   facebookUserId?: string
   pageId?: string
-  accountType?: FacebookEmbedTarget
+  accountName?: string
+  platformLogin?: string
+  tokenExpiresAt?: string
 }
 
 export interface EmbedRefreshFacebookLiveMessage {
   type: 'studio-embed/v1/refresh-facebook-live'
   requestId: string
   tenantId?: string
+  accessToken: string
+  streamingTargetId: string
   facebookUserId?: string
   pageId?: string
   accountType?: FacebookEmbedTarget
+  accountName?: string
+  platformLogin?: string
+  tokenExpiresAt?: string
 }
 
 export interface EmbedFacebookPageOption {

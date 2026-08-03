@@ -452,9 +452,14 @@ export function CmsEmbedBridgeProvider({
         type: 'studio-embed/v1/refresh-facebook-live',
         requestId,
         tenantId: tenantId ?? undefined,
+        accessToken: hints.accessToken,
+        streamingTargetId: hints.streamingTargetId,
         facebookUserId: hints.facebookUserId,
         pageId: hints.pageId,
         accountType: hints.accountType,
+        accountName: hints.accountName,
+        platformLogin: hints.platformLogin,
+        tokenExpiresAt: hints.tokenExpiresAt,
       }
 
       const refreshPromise = new Promise<PlatformConnectionPayload>((resolve, reject) => {
