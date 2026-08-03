@@ -17,8 +17,10 @@ import {
   type EmbedPlatform,
   type EmbedReadyMessage,
   type EmbedRefreshFacebookLiveMessage,
+  type EmbedRefreshYouTubeLiveMessage,
   type FacebookEmbedTarget,
   type FacebookLiveRefreshHints,
+  type YouTubeLiveRefreshHints,
   type PlatformConnectionPayload,
 } from '@/lib/integration/cmsEmbedProtocol'
 import {
@@ -30,6 +32,7 @@ import {
 const CONNECT_TIMEOUT_MS = 120_000
 const FACEBOOK_PAGE_TIMEOUT_MS = 5 * 60 * 1000
 const FACEBOOK_REFRESH_TIMEOUT_MS = 60_000
+const YOUTUBE_REFRESH_TIMEOUT_MS = 90_000
 
 interface PendingConnect {
   resolve: (payload: PlatformConnectionPayload) => void
@@ -39,7 +42,7 @@ interface PendingConnect {
   timeoutId: number
 }
 
-interface PendingFacebookRefresh {
+interface PendingEmbedRefresh {
   resolve: (payload: PlatformConnectionPayload) => void
   reject: (error: Error) => void
   generation: number
@@ -83,6 +86,7 @@ interface CmsEmbedBridgeContextValue {
     tenantId?: string | null,
   ) => Promise<FacebookConnectFlowResult>
   requestFacebookLiveRefresh: (hints: FacebookLiveRefreshHints) => Promise<PlatformConnectionPayload>
+  requestYouTubeLiveRefresh: (hints: YouTubeLiveRefreshHints) => Promise<PlatformConnectionPayload>
   cancelActivePlatformConnect: () => void
 }
 
@@ -109,7 +113,7 @@ export function CmsEmbedBridgeProvider({
   const isEmbedded = isEmbeddedIntegration()
   const [delegatePlatforms, setDelegatePlatforms] = useState<EmbedPlatform[]>([])
   const pendingRef = useRef<Map<string, PendingConnect>>(new Map())
-  const pendingRefreshRef = useRef<Map<string, PendingFacebookRefresh>>(new Map())
+  const pendingRefreshRef = useRef<Map<string, PendingEmbedRefresh>>(new Map())
   const facebookPagesRef = useRef<PendingFacebookPages | null>(null)
   const connectGenerationRef = useRef(0)
   const refreshGenerationRef = useRef(0)
@@ -234,7 +238,7 @@ export function CmsEmbedBridgeProvider({
           if (refreshPending) {
             if (refreshPending.generation !== refreshGenerationRef.current) return
             clearPendingRefresh(event.data.requestId)
-            refreshPending.reject(new Error(event.data.error || 'Facebook live refresh failed'))
+            refreshPending.reject(new Error(event.data.error || 'Embed live refresh failed'))
             break
           }
 
@@ -484,6 +488,52 @@ export function CmsEmbedBridgeProvider({
     [clearPendingRefresh, isEmbedded, tenantId],
   )
 
+  const requestYouTubeLiveRefresh = useCallback(
+    (hints: YouTubeLiveRefreshHints) => {
+      if (!isEmbedded) {
+        return Promise.reject(new Error('CMS embed bridge is only available in embedded mode'))
+      }
+
+      refreshGenerationRef.current += 1
+      const generation = refreshGenerationRef.current
+      const requestId = createEmbedRequestId()
+
+      const message: EmbedRefreshYouTubeLiveMessage = {
+        type: 'studio-embed/v1/refresh-youtube-live',
+        requestId,
+        tenantId: tenantId ?? undefined,
+        accessToken: hints.accessToken,
+        refreshToken: hints.refreshToken,
+        channelId: hints.channelId,
+        accountName: hints.accountName,
+        platformLogin: hints.platformLogin,
+        tokenExpiresAt: hints.tokenExpiresAt,
+        title: hints.title,
+        description: hints.description,
+      }
+
+      const refreshPromise = new Promise<PlatformConnectionPayload>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          if (!pendingRefreshRef.current.has(requestId)) return
+          if (refreshGenerationRef.current !== generation) return
+          clearPendingRefresh(requestId)
+          reject(new Error('YouTube live refresh timed out'))
+        }, YOUTUBE_REFRESH_TIMEOUT_MS)
+
+        pendingRefreshRef.current.set(requestId, {
+          resolve,
+          reject,
+          generation,
+          timeoutId,
+        })
+      })
+
+      postToParent(message)
+      return refreshPromise
+    },
+    [clearPendingRefresh, isEmbedded, tenantId],
+  )
+
   const value = useMemo<CmsEmbedBridgeContextValue>(
     () => ({
       isEmbedded,
@@ -491,6 +541,7 @@ export function CmsEmbedBridgeProvider({
       requestPlatformConnect,
       requestFacebookConnect,
       requestFacebookLiveRefresh,
+      requestYouTubeLiveRefresh,
       cancelActivePlatformConnect,
     }),
     [
@@ -499,6 +550,7 @@ export function CmsEmbedBridgeProvider({
       requestPlatformConnect,
       requestFacebookConnect,
       requestFacebookLiveRefresh,
+      requestYouTubeLiveRefresh,
       cancelActivePlatformConnect,
     ],
   )
@@ -519,6 +571,8 @@ export function useCmsEmbedBridge(): CmsEmbedBridgeContextValue {
       requestFacebookConnect: () =>
         Promise.reject(new Error('CmsEmbedBridgeProvider is not mounted')),
       requestFacebookLiveRefresh: () =>
+        Promise.reject(new Error('CmsEmbedBridgeProvider is not mounted')),
+      requestYouTubeLiveRefresh: () =>
         Promise.reject(new Error('CmsEmbedBridgeProvider is not mounted')),
       cancelActivePlatformConnect: () => undefined,
     }

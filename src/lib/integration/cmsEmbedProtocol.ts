@@ -45,6 +45,17 @@ export interface FacebookLiveRefreshHints {
   tokenExpiresAt?: string
 }
 
+export interface YouTubeLiveRefreshHints {
+  accessToken: string
+  refreshToken?: string
+  channelId?: string
+  accountName?: string
+  platformLogin?: string
+  tokenExpiresAt?: string
+  title?: string
+  description?: string
+}
+
 export interface EmbedRefreshFacebookLiveMessage {
   type: 'studio-embed/v1/refresh-facebook-live'
   requestId: string
@@ -57,6 +68,20 @@ export interface EmbedRefreshFacebookLiveMessage {
   accountName?: string
   platformLogin?: string
   tokenExpiresAt?: string
+}
+
+export interface EmbedRefreshYouTubeLiveMessage {
+  type: 'studio-embed/v1/refresh-youtube-live'
+  requestId: string
+  tenantId?: string
+  accessToken: string
+  refreshToken?: string
+  channelId?: string
+  accountName?: string
+  platformLogin?: string
+  tokenExpiresAt?: string
+  title?: string
+  description?: string
 }
 
 export interface EmbedFacebookPageOption {
@@ -103,6 +128,7 @@ export type EmbedOutboundMessage =
   | EmbedCancelPlatformConnectMessage
   | EmbedSelectFacebookPageMessage
   | EmbedRefreshFacebookLiveMessage
+  | EmbedRefreshYouTubeLiveMessage
 
 export type EmbedInboundMessage =
   | EmbedConfigMessage

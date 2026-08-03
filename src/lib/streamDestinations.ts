@@ -1,14 +1,15 @@
 import {
   refreshPlatformConnection,
   importPlatformConnectionFromEmbed,
-  getFacebookEmbedCredentials,
-  type FacebookEmbedCredentials,
+  getPlatformEmbedCredentials,
+  type PlatformEmbedCredentials,
 } from '@/api/integrations'
 import type { StreamDestinationInput } from '@/api/streaming'
 import { DestinationPlatform as Platform } from '@/types/destinations'
 import type { PersistedDestination, PersistedPlatformConnection } from '@/types/persistence'
 import type {
   FacebookLiveRefreshHints,
+  YouTubeLiveRefreshHints,
   PlatformConnectionPayload,
 } from '@/lib/integration/cmsEmbedProtocol'
 import { mapEmbedPayloadToImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
@@ -41,9 +42,21 @@ export function shouldRefreshFacebookStreamKeyOnGoLive(
   )
 }
 
+export function shouldRefreshYouTubeStreamOnGoLive(
+  connection: PersistedPlatformConnection,
+): boolean {
+  const source = connection.metadata?.source
+  return (
+    connection.platform === Platform.YOUTUBE &&
+    STREAMABLE_CONNECTION_STATUSES.has(connection.status) &&
+    typeof source === 'string' &&
+    CMS_EMBED_SOURCES.has(source)
+  )
+}
+
 function buildFacebookRefreshHints(
   connection: PersistedPlatformConnection,
-  credentials: FacebookEmbedCredentials,
+  credentials: PlatformEmbedCredentials,
 ): FacebookLiveRefreshHints {
   const metadata = {
     ...(connection.metadata ?? {}),
@@ -76,8 +89,36 @@ function buildFacebookRefreshHints(
   }
 }
 
+function buildYouTubeRefreshHints(
+  connection: PersistedPlatformConnection,
+  credentials: PlatformEmbedCredentials,
+): YouTubeLiveRefreshHints {
+  const metadata = {
+    ...(connection.metadata ?? {}),
+    ...(credentials.metadata ?? {}),
+  }
+  const channelIdRaw = metadata.channel_id
+  const channelId =
+    typeof channelIdRaw === 'string'
+      ? channelIdRaw
+      : credentials.platform_user_id || connection.platform_user_id
+
+  return {
+    accessToken: credentials.access_token,
+    refreshToken: credentials.refresh_token,
+    channelId,
+    accountName: credentials.name || connection.name,
+    platformLogin: credentials.platform_login || connection.platform_login,
+    tokenExpiresAt: credentials.token_expires_at,
+  }
+}
+
 export type FacebookLiveRefreshFn = (
   hints: FacebookLiveRefreshHints,
+) => Promise<PlatformConnectionPayload>
+
+export type YouTubeLiveRefreshFn = (
+  hints: YouTubeLiveRefreshHints,
 ) => Promise<PlatformConnectionPayload>
 
 function isStreamableConnection(connection: PersistedPlatformConnection): boolean {
@@ -156,12 +197,30 @@ export async function refreshFacebookStreamKeys(
   )
 
   for (const connection of facebookConnections) {
-    const credentials = await getFacebookEmbedCredentials(tenantId, connection.connection_id)
+    const credentials = await getPlatformEmbedCredentials(tenantId, connection.connection_id)
     const hints = buildFacebookRefreshHints(connection, credentials)
     const payload = await refreshFn(hints)
     await importPlatformConnectionFromEmbed(
       tenantId,
       mapEmbedPayloadToImportRequest('facebook', payload),
+    )
+  }
+}
+
+export async function refreshYouTubeStreamKeys(
+  tenantId: string,
+  platformConnections: PersistedPlatformConnection[] = [],
+  refreshFn: YouTubeLiveRefreshFn,
+): Promise<void> {
+  const youtubeConnections = platformConnections.filter(shouldRefreshYouTubeStreamOnGoLive)
+
+  for (const connection of youtubeConnections) {
+    const credentials = await getPlatformEmbedCredentials(tenantId, connection.connection_id)
+    const hints = buildYouTubeRefreshHints(connection, credentials)
+    const payload = await refreshFn(hints)
+    await importPlatformConnectionFromEmbed(
+      tenantId,
+      mapEmbedPayloadToImportRequest('youtube', payload),
     )
   }
 }
@@ -204,6 +263,38 @@ export function willStreamToFacebook(
     selectedDestinations.map((item) => item.label?.trim() || 'Custom'),
   )
   return facebookSaved.some((destination) =>
+    selectedLabels.has(destination.label.trim() || destination.platform || 'Custom'),
+  )
+}
+
+export function willStreamToYouTube(
+  platformConnections: PersistedPlatformConnection[],
+  savedDestinations: PersistedDestination[],
+  selectedDestinations?: StreamDestinationInput[],
+): boolean {
+  const youtubeConnections = platformConnections.filter(shouldRefreshYouTubeStreamOnGoLive)
+  if (youtubeConnections.length === 0) return false
+
+  if (!selectedDestinations?.length) {
+    return true
+  }
+
+  const selectedLabels = new Set(
+    selectedDestinations.map((item) => item.label?.trim() || 'Custom'),
+  )
+
+  if (
+    youtubeConnections.some((connection) =>
+      selectedLabels.has(connection.name.trim() || 'YouTube'),
+    )
+  ) {
+    return true
+  }
+
+  const youtubeDestinations = savedDestinations.filter(
+    (destination) => destination.platform === Platform.YOUTUBE,
+  )
+  return youtubeDestinations.some((destination) =>
     selectedLabels.has(destination.label.trim() || destination.platform || 'Custom'),
   )
 }

@@ -50,17 +50,24 @@ export function importPlatformConnectionFromEmbed(
   )
 }
 
-export interface FacebookEmbedCredentials {
+export interface PlatformEmbedCredentials {
   access_token: string
   platform_user_id: string
   platform_login: string
   name: string
   metadata: Record<string, unknown>
+  refresh_token?: string
+  token_expires_at?: string
 }
 
 /** Tokens for CMS embed go-live refresh (persistence source of truth). */
-export function getFacebookEmbedCredentials(tenantId: string, connectionId: string) {
-  return persistenceRequest<FacebookEmbedCredentials>(
+export function getPlatformEmbedCredentials(tenantId: string, connectionId: string) {
+  return persistenceRequest<PlatformEmbedCredentials>(
     `/tenant/${tenantId}/platform-connections/${connectionId}/embed-credentials/`,
   )
+}
+
+/** @deprecated Use getPlatformEmbedCredentials */
+export function getFacebookEmbedCredentials(tenantId: string, connectionId: string) {
+  return getPlatformEmbedCredentials(tenantId, connectionId)
 }

@@ -42,8 +42,10 @@ import {
   hasTwitchStreamDestination,
   refreshFacebookStreamKeys,
   refreshTwitchStreamKeys,
+  refreshYouTubeStreamKeys,
   toStreamDestinationInputs,
   willStreamToFacebook,
+  willStreamToYouTube,
 } from '@/lib/streamDestinations'
 import { tileSourceToStudioParticipant } from '@/types/participants'
 import { clearStudioContext } from '@/lib/studioContext'
@@ -60,7 +62,7 @@ interface StudioLayoutProps {
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
   const { configuration, refreshConfiguration, tenantId } = useTenant()
-  const { isEmbedded, requestFacebookLiveRefresh } = useCmsEmbedBridge()
+  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh } = useCmsEmbedBridge()
   const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
@@ -413,6 +415,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           )
           const shouldRefreshFacebook =
             isEmbedded && willStreamToFacebook(currentStreamable, resolvedDestinations)
+          const shouldRefreshYouTube =
+            isEmbedded &&
+            willStreamToYouTube(platformConnections, savedDestinations, resolvedDestinations)
 
           await refreshTwitchStreamKeys(tenantId, platformConnections)
           if (shouldRefreshFacebook) {
@@ -427,6 +432,22 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 err instanceof Error
                   ? err.message
                   : 'Failed to refresh Facebook stream key before going live',
+              )
+              return
+            }
+          }
+          if (shouldRefreshYouTube) {
+            try {
+              await refreshYouTubeStreamKeys(
+                tenantId,
+                platformConnections,
+                requestYouTubeLiveRefresh,
+              )
+            } catch (err) {
+              toast.error(
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to refresh YouTube stream key before going live',
               )
               return
             }
@@ -492,6 +513,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       savedDestinations,
       isEmbedded,
       requestFacebookLiveRefresh,
+      requestYouTubeLiveRefresh,
     ],
   )
 
