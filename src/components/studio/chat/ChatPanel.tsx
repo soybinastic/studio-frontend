@@ -198,6 +198,7 @@ export function ChatPanel({
           <SocialCommentsTab
             comments={chat.socialComments}
             connectionState={chat.connectionState}
+            activeDestinations={socialOutbound.destinations}
             subscribedPlatforms={chat.subscribedPlatforms}
             sessionError={chat.sessionError}
             className="min-h-0 flex-1"

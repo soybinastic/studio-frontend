@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { Send } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Loader2, Send } from 'lucide-react'
 import type { SocialDestinationSummary, SocialSendTarget } from '@/api/studioChat'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 
 const MAX_MESSAGE_LENGTH = 500
 const CHAR_COUNT_THRESHOLD = Math.floor(MAX_MESSAGE_LENGTH * 0.8)
+const CHIP_DESTINATION_THRESHOLD = 3
 
 const PLATFORM_LABELS = {
   youtube: 'YouTube',
@@ -34,6 +35,36 @@ function destinationLabel(destination: SocialDestinationSummary): string {
   return account ? `${platformLabel} (${account})` : platformLabel
 }
 
+function DestinationChips({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: Array<{ value: SocialSendTarget; label: string }>
+  value: SocialSendTarget
+  onChange: (next: SocialSendTarget) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          type="button"
+          size="sm"
+          variant={value === option.value ? 'secondary' : 'ghost'}
+          className="h-7 rounded-full px-2.5 text-[10px]"
+          disabled={disabled}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
 export function SocialCompose({
   destinations,
   disabled = false,
@@ -43,6 +74,7 @@ export function SocialCompose({
 }: SocialComposeProps) {
   const [value, setValue] = useState('')
   const [platform, setPlatform] = useState<SocialSendTarget>('all')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const platformOptions = useMemo(() => {
     const items = destinations.map((destination) => ({
@@ -50,7 +82,7 @@ export function SocialCompose({
       label: destinationLabel(destination),
     }))
     if (items.length > 1) {
-      return [{ value: 'all' as const, label: 'All platforms' }, ...items]
+      return [{ value: 'all' as const, label: 'All' }, ...items]
     }
     return items
   }, [destinations])
@@ -70,6 +102,17 @@ export function SocialCompose({
     }
   }, [platform, platformOptions])
 
+  const adjustHeight = () => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 96)}px`
+  }
+
+  useEffect(() => {
+    adjustHeight()
+  }, [value])
+
   const handleSend = async () => {
     const trimmed = value.trim()
     if (!trimmed || disabled || sending || destinations.length === 0) {
@@ -77,6 +120,9 @@ export function SocialCompose({
     }
     await onSend(platform, trimmed)
     setValue('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -88,6 +134,7 @@ export function SocialCompose({
 
   const composeDisabled = disabled || sending || destinations.length === 0
   const showCharCount = value.length >= CHAR_COUNT_THRESHOLD
+  const useChipDestinations = platformOptions.length <= CHIP_DESTINATION_THRESHOLD
 
   return (
     <div className={cn('shrink-0 space-y-2 border-t border-border/60 pt-2', className)}>
@@ -97,25 +144,37 @@ export function SocialCompose({
         </p>
       ) : null}
 
-      <div className="flex items-end gap-2">
-        <Select
+      {useChipDestinations && platformOptions.length > 1 ? (
+        <DestinationChips
+          options={platformOptions}
           value={platform}
-          onValueChange={(next) => setPlatform(next as SocialSendTarget)}
-          disabled={composeDisabled || platformOptions.length <= 1}
-        >
-          <SelectTrigger className="h-9 w-[8.5rem] shrink-0 text-xs" aria-label="Social destination">
-            <SelectValue placeholder="Destination" />
-          </SelectTrigger>
-          <SelectContent>
-            {platformOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value} className="text-xs">
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={setPlatform}
+          disabled={composeDisabled}
+        />
+      ) : null}
+
+      <div className="flex items-end gap-2">
+        {!useChipDestinations && platformOptions.length > 0 ? (
+          <Select
+            value={platform}
+            onValueChange={(next) => setPlatform(next as SocialSendTarget)}
+            disabled={composeDisabled || platformOptions.length <= 1}
+          >
+            <SelectTrigger className="h-9 w-[8.5rem] shrink-0 text-xs" aria-label="Social destination">
+              <SelectValue placeholder="Destination" />
+            </SelectTrigger>
+            <SelectContent>
+              {platformOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value} className="text-xs">
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
 
         <Textarea
+          ref={textareaRef}
           value={value}
           onChange={(event) => setValue(event.target.value.slice(0, MAX_MESSAGE_LENGTH))}
           onKeyDown={handleKeyDown}
@@ -134,7 +193,11 @@ export function SocialCompose({
           onClick={() => void handleSend()}
           aria-label="Send social message"
         >
-          <Send className="h-4 w-4" />
+          {sending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
         </Button>
       </div>
 
