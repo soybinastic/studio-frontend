@@ -156,7 +156,13 @@ export function ChatPanel({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col" role="tabpanel" aria-label="Social comments">
-          <SocialCommentsTab comments={chat.socialComments} className="min-h-0 flex-1" />
+          <SocialCommentsTab
+            comments={chat.socialComments}
+            connectionState={chat.connectionState}
+            subscribedPlatforms={chat.subscribedPlatforms}
+            sessionError={chat.sessionError}
+            className="min-h-0 flex-1"
+          />
         </div>
       )}
     </div>
