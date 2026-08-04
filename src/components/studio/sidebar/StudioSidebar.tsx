@@ -146,13 +146,12 @@ export function StudioSidebar({
   const [chatSubTab, setChatSubTab] = useState<ChatSubTab>('participants')
   const showExpandedContent = drawerMode || expanded
 
-  const participantMessageCount = chat?.messages.length ?? 0
-  const socialCommentCount = chat?.socialComments.length ?? 0
   const isChatTabActive = activeTab === 'chat' && showExpandedContent
 
   const { participantUnread, socialUnread, totalUnread } = useChatUnread({
-    participantMessageCount,
-    socialCommentCount,
+    messages: chat?.messages ?? [],
+    socialComments: chat?.socialComments ?? [],
+    currentUserId: currentUserId ?? '',
     isChatTabActive,
     chatSubTab,
   })
@@ -181,7 +180,12 @@ export function StudioSidebar({
       header={<SidebarTabs activeTab={activeTab} onTabChange={handleTabChange} chatUnread={totalUnread} />}
     >
       {showExpandedContent ? (
-        <div className="studio-panel-scroll flex-1 overflow-y-auto p-3">
+        <div
+          className={cn(
+            'studio-panel-scroll flex-1 p-3',
+            activeTab === 'chat' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto',
+          )}
+        >
           {activeTab === 'graphics' && (
             <GraphicsPanel
               layout={layout}

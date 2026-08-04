@@ -16,6 +16,27 @@ const LABELS: Record<StudioChatConnectionState, string> = {
   error: 'Connection error',
 }
 
+interface ConnectionDotProps {
+  state: StudioChatConnectionState
+  className?: string
+}
+
+export function ConnectionDot({ state, className }: ConnectionDotProps) {
+  return (
+    <span
+      className={cn(
+        'inline-block h-2 w-2 shrink-0 rounded-full',
+        state === 'connected' && 'bg-green-500',
+        state === 'connecting' && 'animate-pulse bg-amber-500',
+        (state === 'disconnected' || state === 'error') && 'bg-destructive',
+        state === 'idle' && 'bg-muted-foreground/40',
+        className,
+      )}
+      aria-hidden
+    />
+  )
+}
+
 export function ChatConnectionStatus({ state, error, className }: ChatConnectionStatusProps) {
   if (state === 'connected') return null
 

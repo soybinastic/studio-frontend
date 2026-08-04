@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
-import { MessageSquare, MessageSquareReply } from 'lucide-react'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
+import { useMemo, useRef, useState } from 'react'
 import { ChatSubTabs, type ChatSubTab } from '@/components/studio/chat/ChatSubTabs'
-import { ChatConnectionStatus } from '@/components/studio/chat/ChatConnectionStatus'
+import {
+  ChatConnectionStatus,
+  ConnectionDot,
+} from '@/components/studio/chat/ChatConnectionStatus'
 import { ChatMessageList } from '@/components/studio/chat/ChatMessageList'
-import { ChatCompose } from '@/components/studio/chat/ChatCompose'
+import { ChatCompose, type ChatComposeHandle } from '@/components/studio/chat/ChatCompose'
+import { ChatTypingIndicator } from '@/components/studio/chat/ChatTypingIndicator'
 import { SocialCommentsTab } from '@/components/studio/chat/SocialCommentsTab'
 import type { useStudioChat } from '@/hooks/useStudioChat'
 import type { ParticipantMedia } from '@/types/session'
@@ -40,6 +41,7 @@ export function ChatPanel({
   className,
 }: ChatPanelProps) {
   const [privateRecipientId, setPrivateRecipientId] = useState<string | null>(null)
+  const composeRef = useRef<ChatComposeHandle>(null)
 
   const nameByPeerId = useMemo(() => {
     const map = new Map<string, string>()
@@ -72,88 +74,91 @@ export function ChatPanel({
   }
 
   const handleReplyPrivate = (userId: string) => {
-    if (isHost) {
-      setPrivateRecipientId(userId)
-      return
-    }
-    setPrivateRecipientId(hostPeerId)
+    const recipientId = isHost ? userId : hostPeerId
+    setPrivateRecipientId(recipientId)
+    composeRef.current?.focus()
   }
 
-  const handleReplyToHost = () => {
+  const handleStartPrivate = () => {
     setPrivateRecipientId(hostPeerId)
+    composeRef.current?.focus()
   }
 
   const isConnected = chat.connectionState === 'connected'
   const chatEnabled = isStudioChatEnabled()
-  const typingLabel =
-    chat.typingUserIds.length > 0
-      ? `${chat.typingUserIds.map(resolveDisplayName).join(', ')} typing…`
-      : null
+  const typingNames = chat.typingUserIds.map(resolveDisplayName)
 
   return (
-    <div className={cn('flex min-h-[20rem] flex-col space-y-3', className)}>
-      <div className="rounded-lg border border-border/60 p-3">
-        <Label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
-          <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-          Chat
-        </Label>
+    <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+      <div className="mb-3 flex items-center gap-2">
         <ChatSubTabs
           activeTab={subTab}
           onTabChange={onSubTabChange}
           participantUnread={participantUnread}
           socialUnread={socialUnread}
-          className="mb-3"
+          className="min-w-0 flex-1"
         />
-        <ChatConnectionStatus state={chat.connectionState} error={chat.lastError} className="mb-3" />
-
-        {!chatEnabled ? (
-          <p className="text-xs text-muted-foreground">
-            Set <code className="text-[10px]">VITE_STUDIO_CHAT_WS_URL</code> to enable session chat.
-          </p>
-        ) : subTab === 'participants' ? (
-          <div className="flex min-h-[16rem] flex-col" role="tabpanel" aria-label="Participant chat">
-            <ChatMessageList
-              messages={participantMessages}
-              currentUserId={currentUserId}
-              isHost={isHost}
-              resolveDisplayName={resolveDisplayName}
-              onHide={isHost ? chat.hideMessage : undefined}
-              onDelete={isHost ? chat.deleteMessage : undefined}
-              onReplyPrivate={handleReplyPrivate}
-              className="mb-2 max-h-64 min-h-32"
-            />
-            {typingLabel && (
-              <p className="mb-1 text-[10px] italic text-muted-foreground" aria-live="polite">
-                {typingLabel}
-              </p>
-            )}
-            {!isHost && !privateRecipientId && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mb-2 h-7 w-full text-xs"
-                disabled={!isConnected}
-                onClick={handleReplyToHost}
-              >
-                <MessageSquareReply className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                Message {hostDisplayName} privately
-              </Button>
-            )}
-            <ChatCompose
-              onSend={handleSend}
-              onTyping={chat.sendTyping}
-              disabled={!isConnected}
-              privateRecipientName={privateRecipientName}
-              onCancelPrivate={() => setPrivateRecipientId(null)}
-            />
-          </div>
-        ) : (
-          <div role="tabpanel" aria-label="Social comments">
-            <SocialCommentsTab comments={chat.socialComments} />
-          </div>
+        {chatEnabled && (
+          <span
+            className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground"
+            title={
+              chat.connectionState === 'connected'
+                ? 'Connected'
+                : chat.connectionState === 'connecting'
+                  ? 'Connecting…'
+                  : 'Disconnected'
+            }
+          >
+            <ConnectionDot state={chat.connectionState} />
+          </span>
         )}
       </div>
+
+      <ChatConnectionStatus state={chat.connectionState} error={chat.lastError} className="mb-3" />
+
+      {!chatEnabled ? (
+        <p className="text-xs text-muted-foreground">
+          Set <code className="text-[10px]">VITE_STUDIO_CHAT_WS_URL</code> to enable session chat.
+        </p>
+      ) : subTab === 'participants' ? (
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          role="tabpanel"
+          aria-label="Participant chat"
+        >
+          <ChatMessageList
+            messages={participantMessages}
+            currentUserId={currentUserId}
+            isHost={isHost}
+            hostPeerId={hostPeerId}
+            resolveDisplayName={resolveDisplayName}
+            onHide={isHost ? chat.hideMessage : undefined}
+            onUnhide={isHost ? chat.unhideMessage : undefined}
+            onDelete={isHost ? chat.deleteMessage : undefined}
+            onReplyPrivate={handleReplyPrivate}
+            onLoadMore={chat.requestHistory}
+            className="min-h-0 flex-1"
+          />
+
+          <ChatTypingIndicator names={typingNames} className="mb-1 shrink-0" />
+
+          <ChatCompose
+            ref={composeRef}
+            onSend={handleSend}
+            onTyping={chat.sendTyping}
+            disabled={!isConnected}
+            privateRecipientName={privateRecipientName}
+            onCancelPrivate={() => setPrivateRecipientId(null)}
+            onStartPrivate={!isHost ? handleStartPrivate : undefined}
+            showPrivateShortcut={!isHost && !privateRecipientId}
+            privateShortcutLabel={`Message ${hostDisplayName} privately`}
+          />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col" role="tabpanel" aria-label="Social comments">
+          <SocialCommentsTab comments={chat.socialComments} className="min-h-0 flex-1" />
+        </div>
+      )}
     </div>
   )
 }
