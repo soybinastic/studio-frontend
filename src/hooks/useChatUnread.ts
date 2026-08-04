@@ -11,8 +11,16 @@ interface UseChatUnreadOptions {
   chatSubTab: ChatSubTab
 }
 
-function socialKey(comment: SocialCommentPayload): string {
-  return `${comment.platform}:${comment.platformMessageId}`
+function countUnreadFromOthers(
+  items: ChatMessageDto[],
+  delta: number,
+  currentUserId: string,
+): number {
+  if (delta <= 0) return 0
+  const recent = items.slice(-delta)
+  return recent.filter(
+    (item) => item.senderId !== currentUserId && item.status !== 'deleted',
+  ).length
 }
 
 export function useChatUnread({
@@ -24,55 +32,59 @@ export function useChatUnread({
 }: UseChatUnreadOptions) {
   const [participantUnread, setParticipantUnread] = useState(0)
   const [socialUnread, setSocialUnread] = useState(0)
-  const seenMessageIdsRef = useRef<Set<string>>(new Set())
-  const seenSocialIdsRef = useRef<Set<string>>(new Set())
-  const seededRef = useRef(false)
+  const prevMessageCountRef = useRef(0)
+  const prevSocialCountRef = useRef(0)
+  const participantHistorySeededRef = useRef(false)
+  const socialHistorySeededRef = useRef(false)
 
   useEffect(() => {
-    if (!seededRef.current && messages.length === 0 && socialComments.length === 0) {
-      return
+    if (!participantHistorySeededRef.current) {
+      if (messages.length === 0) return
+
+      const isBulkHistory = messages.length > 1
+      const isViewingParticipants = isChatTabActive && chatSubTab === 'participants'
+
+      if (isBulkHistory || isViewingParticipants) {
+        prevMessageCountRef.current = messages.length
+        participantHistorySeededRef.current = true
+        return
+      }
+
+      participantHistorySeededRef.current = true
     }
 
-    if (!seededRef.current) {
-      for (const message of messages) {
-        seenMessageIdsRef.current.add(message.id)
-      }
-      for (const comment of socialComments) {
-        seenSocialIdsRef.current.add(socialKey(comment))
-      }
-      seededRef.current = true
-      return
-    }
+    const delta = messages.length - prevMessageCountRef.current
+    prevMessageCountRef.current = messages.length
 
-    let newParticipantUnread = 0
-    for (const message of messages) {
-      if (seenMessageIdsRef.current.has(message.id)) continue
-      seenMessageIdsRef.current.add(message.id)
-      if (message.senderId === currentUserId) continue
-      if (message.status === 'deleted') continue
-      if (!(isChatTabActive && chatSubTab === 'participants')) {
-        newParticipantUnread += 1
+    if (delta > 0 && !(isChatTabActive && chatSubTab === 'participants')) {
+      const unread = countUnreadFromOthers(messages, delta, currentUserId)
+      if (unread > 0) {
+        setParticipantUnread((count) => count + unread)
       }
-    }
-    if (newParticipantUnread > 0) {
-      setParticipantUnread((count) => count + newParticipantUnread)
     }
   }, [messages, currentUserId, isChatTabActive, chatSubTab])
 
   useEffect(() => {
-    if (!seededRef.current) return
+    if (!socialHistorySeededRef.current) {
+      if (socialComments.length === 0) return
 
-    let newSocialUnread = 0
-    for (const comment of socialComments) {
-      const key = socialKey(comment)
-      if (seenSocialIdsRef.current.has(key)) continue
-      seenSocialIdsRef.current.add(key)
-      if (!(isChatTabActive && chatSubTab === 'socials')) {
-        newSocialUnread += 1
+      const isBulkHistory = socialComments.length > 1
+      const isViewingSocials = isChatTabActive && chatSubTab === 'socials'
+
+      if (isBulkHistory || isViewingSocials) {
+        prevSocialCountRef.current = socialComments.length
+        socialHistorySeededRef.current = true
+        return
       }
+
+      socialHistorySeededRef.current = true
     }
-    if (newSocialUnread > 0) {
-      setSocialUnread((count) => count + newSocialUnread)
+
+    const delta = socialComments.length - prevSocialCountRef.current
+    prevSocialCountRef.current = socialComments.length
+
+    if (delta > 0 && !(isChatTabActive && chatSubTab === 'socials')) {
+      setSocialUnread((count) => count + delta)
     }
   }, [socialComments, isChatTabActive, chatSubTab])
 

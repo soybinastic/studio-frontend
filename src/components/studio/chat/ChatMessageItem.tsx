@@ -187,7 +187,7 @@ export function ChatMessageItem({
     <>
       <div
         className={cn(
-          'group flex w-full gap-2',
+          'group mb-1.5 flex w-full gap-2',
           isOwn ? 'flex-row-reverse' : 'flex-row',
           !showHeader && !isOwn && 'pl-9',
         )}

@@ -116,7 +116,7 @@ export function ChatMessageList({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-1 py-2"
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-1 py-2 pb-3"
         role="log"
         aria-label="Chat messages"
       >
