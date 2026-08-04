@@ -171,6 +171,7 @@ export function SocialCommentsTab({
             className={cn(
               'rounded-lg border border-border/60 border-l-[3px] bg-background/50 px-2.5 py-2',
               PLATFORM_BORDER[comment.platform],
+              comment.source === 'host_outbound' && 'bg-primary/5',
             )}
           >
             <div className="mb-1 flex items-center justify-between gap-2">

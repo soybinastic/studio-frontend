@@ -36,6 +36,10 @@ export function formatSocialAccountLabel(comment: SocialCommentPayload): string 
 }
 
 export function formatSocialSenderLine(comment: SocialCommentPayload): string {
+  if (comment.source === 'host_outbound') {
+    return `You · ${PLATFORM_LABELS[comment.platform]}`
+  }
+
   const accountLabel = formatSocialAccountLabel(comment)
   if (accountLabel) {
     return `${comment.from.name} (${accountLabel})`
