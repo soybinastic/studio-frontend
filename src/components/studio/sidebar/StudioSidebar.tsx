@@ -232,6 +232,7 @@ export function StudioSidebar({
 
           {activeTab === 'chat' && chat && sessionId && currentUserId && hostPeerId && (
             <ChatPanel
+              sessionId={sessionId}
               isHost={isHost}
               currentUserId={currentUserId}
               hostPeerId={hostPeerId}

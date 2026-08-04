@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { ChatSubTabs, type ChatSubTab } from '@/components/studio/chat/ChatSubTabs'
 import {
   ChatConnectionStatus,
@@ -8,7 +9,9 @@ import { ChatMessageList } from '@/components/studio/chat/ChatMessageList'
 import { ChatCompose, type ChatComposeHandle } from '@/components/studio/chat/ChatCompose'
 import { ChatTypingIndicator } from '@/components/studio/chat/ChatTypingIndicator'
 import { SocialCommentsTab } from '@/components/studio/chat/SocialCommentsTab'
+import { SocialCompose } from '@/components/studio/chat/SocialCompose'
 import type { useStudioChat } from '@/hooks/useStudioChat'
+import { useSocialOutbound } from '@/hooks/useSocialOutbound'
 import type { ParticipantMedia } from '@/types/session'
 import { isStudioChatEnabled } from '@/lib/studioChatEnv'
 import { cn } from '@/lib/utils'
@@ -16,6 +19,7 @@ import { cn } from '@/lib/utils'
 type StudioChatStore = ReturnType<typeof useStudioChat>
 
 interface ChatPanelProps {
+  sessionId: string
   isHost: boolean
   currentUserId: string
   hostPeerId: string
@@ -29,6 +33,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({
+  sessionId,
   isHost,
   currentUserId,
   hostPeerId,
@@ -42,6 +47,41 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [privateRecipientId, setPrivateRecipientId] = useState<string | null>(null)
   const composeRef = useRef<ChatComposeHandle>(null)
+  const chatEnabled = isStudioChatEnabled()
+  const socialOutbound = useSocialOutbound({
+    sessionId,
+    enabled: chatEnabled && isHost,
+    active: chatEnabled && isHost && subTab === 'socials',
+  })
+
+  const handleSocialSend = useCallback(
+    async (platform: Parameters<typeof socialOutbound.sendMessage>[0], message: string) => {
+      try {
+        const response = await socialOutbound.sendMessage(platform, message)
+        const failures = response.results.filter((result) => !result.success)
+        if (failures.length === 0) {
+          toast.success(
+            platform === 'all'
+              ? 'Message sent to all social platforms'
+              : `Message sent to ${platform === 'youtube' ? 'YouTube' : 'Twitch'}`,
+          )
+          return
+        }
+        if (response.results.some((result) => result.success)) {
+          toast.warning(
+            failures.map((result) => `${result.platform}: ${result.error ?? 'failed'}`).join(' · '),
+          )
+          return
+        }
+        toast.error(
+          failures.map((result) => `${result.platform}: ${result.error ?? 'failed'}`).join(' · '),
+        )
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to send social message')
+      }
+    },
+    [socialOutbound],
+  )
 
   const nameByPeerId = useMemo(() => {
     const map = new Map<string, string>()
@@ -85,7 +125,6 @@ export function ChatPanel({
   }
 
   const isConnected = chat.connectionState === 'connected'
-  const chatEnabled = isStudioChatEnabled()
   const typingNames = chat.typingUserIds.map(resolveDisplayName)
 
   return (
@@ -163,6 +202,14 @@ export function ChatPanel({
             sessionError={chat.sessionError}
             className="min-h-0 flex-1"
           />
+          {isHost ? (
+            <SocialCompose
+              destinations={socialOutbound.destinations}
+              disabled={!isConnected}
+              sending={socialOutbound.sending}
+              onSend={handleSocialSend}
+            />
+          ) : null}
         </div>
       )}
     </div>
