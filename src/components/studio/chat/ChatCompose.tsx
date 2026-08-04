@@ -64,6 +64,7 @@ export function ChatCompose({
         disabled={disabled}
         rows={2}
         className="min-h-[4rem] resize-none text-xs"
+        aria-label="Chat message"
       />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] text-muted-foreground">

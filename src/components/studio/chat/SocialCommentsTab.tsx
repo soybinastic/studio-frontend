@@ -27,15 +27,24 @@ export function SocialCommentsTab({ comments, className }: SocialCommentsTabProp
   if (comments.length === 0) {
     return (
       <div className={cn('flex min-h-32 items-center justify-center p-4 text-center', className)}>
-        <p className="text-xs text-muted-foreground">
-          No social comments yet. Comments from connected platforms will appear here.
-        </p>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-foreground">No social comments yet</p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Live comments from Facebook, YouTube, or Twitch appear here once the host connects
+            those platforms and goes live from the CMS.
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className={cn('flex max-h-80 min-h-32 flex-col gap-2 overflow-y-auto', className)}>
+    <div
+      className={cn('flex max-h-80 min-h-32 flex-col gap-2 overflow-y-auto', className)}
+      role="log"
+      aria-live="polite"
+      aria-label="Social comments"
+    >
       {comments.map((comment) => (
         <div
           key={`${comment.platform}:${comment.platformMessageId}`}

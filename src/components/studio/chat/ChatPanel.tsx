@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, MessageSquareReply } from 'lucide-react'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import { ChatSubTabs, type ChatSubTab } from '@/components/studio/chat/ChatSubTabs'
 import { ChatConnectionStatus } from '@/components/studio/chat/ChatConnectionStatus'
 import { ChatMessageList } from '@/components/studio/chat/ChatMessageList'
@@ -19,6 +20,10 @@ interface ChatPanelProps {
   hostPeerId: string
   participants: ParticipantMedia[]
   chat: StudioChatStore
+  subTab: ChatSubTab
+  onSubTabChange: (tab: ChatSubTab) => void
+  participantUnread?: number
+  socialUnread?: number
   className?: string
 }
 
@@ -28,9 +33,12 @@ export function ChatPanel({
   hostPeerId,
   participants,
   chat,
+  subTab,
+  onSubTabChange,
+  participantUnread = 0,
+  socialUnread = 0,
   className,
 }: ChatPanelProps) {
-  const [subTab, setSubTab] = useState<ChatSubTab>('participants')
   const [privateRecipientId, setPrivateRecipientId] = useState<string | null>(null)
 
   const nameByPeerId = useMemo(() => {
@@ -42,6 +50,8 @@ export function ChatPanel({
   }, [participants])
 
   const resolveDisplayName = (userId: string) => nameByPeerId.get(userId) ?? userId.slice(0, 8)
+
+  const hostDisplayName = resolveDisplayName(hostPeerId)
 
   const participantMessages = useMemo(
     () => chat.messages.filter((m) => m.visibility === 'public' || m.visibility === 'private'),
@@ -69,6 +79,10 @@ export function ChatPanel({
     setPrivateRecipientId(hostPeerId)
   }
 
+  const handleReplyToHost = () => {
+    setPrivateRecipientId(hostPeerId)
+  }
+
   const isConnected = chat.connectionState === 'connected'
   const chatEnabled = isStudioChatEnabled()
   const typingLabel =
@@ -83,7 +97,13 @@ export function ChatPanel({
           <MessageSquare className="h-3.5 w-3.5" aria-hidden />
           Chat
         </Label>
-        <ChatSubTabs activeTab={subTab} onTabChange={setSubTab} className="mb-3" />
+        <ChatSubTabs
+          activeTab={subTab}
+          onTabChange={onSubTabChange}
+          participantUnread={participantUnread}
+          socialUnread={socialUnread}
+          className="mb-3"
+        />
         <ChatConnectionStatus state={chat.connectionState} error={chat.lastError} className="mb-3" />
 
         {!chatEnabled ? (
@@ -91,7 +111,7 @@ export function ChatPanel({
             Set <code className="text-[10px]">VITE_STUDIO_CHAT_WS_URL</code> to enable session chat.
           </p>
         ) : subTab === 'participants' ? (
-          <div className="flex min-h-[16rem] flex-col">
+          <div className="flex min-h-[16rem] flex-col" role="tabpanel" aria-label="Participant chat">
             <ChatMessageList
               messages={participantMessages}
               currentUserId={currentUserId}
@@ -103,7 +123,22 @@ export function ChatPanel({
               className="mb-2 max-h-64 min-h-32"
             />
             {typingLabel && (
-              <p className="mb-1 text-[10px] italic text-muted-foreground">{typingLabel}</p>
+              <p className="mb-1 text-[10px] italic text-muted-foreground" aria-live="polite">
+                {typingLabel}
+              </p>
+            )}
+            {!isHost && !privateRecipientId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mb-2 h-7 w-full text-xs"
+                disabled={!isConnected}
+                onClick={handleReplyToHost}
+              >
+                <MessageSquareReply className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Message {hostDisplayName} privately
+              </Button>
             )}
             <ChatCompose
               onSend={handleSend}
@@ -114,7 +149,9 @@ export function ChatPanel({
             />
           </div>
         ) : (
-          <SocialCommentsTab comments={chat.socialComments} />
+          <div role="tabpanel" aria-label="Social comments">
+            <SocialCommentsTab comments={chat.socialComments} />
+          </div>
         )}
       </div>
     </div>

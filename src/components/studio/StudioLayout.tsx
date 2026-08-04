@@ -201,6 +201,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     role: context.isHost ? 'host' : 'participant',
     tenantId: tenantId ?? undefined,
     enabled: isStudioChatEnabled(),
+    onError: (message) => toast.error(message),
   })
 
   const activeSceneSources = useMemo(

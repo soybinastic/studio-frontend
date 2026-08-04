@@ -48,7 +48,12 @@ export function ChatMessageList({
   })
 
   return (
-    <div className={cn('flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-1', className)}>
+    <div
+      className={cn('flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-1', className)}
+      role="log"
+      aria-live="polite"
+      aria-label="Chat messages"
+    >
       {visibleMessages.map((message) => (
         <ChatMessageItem
           key={message.id}

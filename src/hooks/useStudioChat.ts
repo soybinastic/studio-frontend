@@ -24,6 +24,7 @@ export interface UseStudioChatOptions {
   role: ChatUserRole
   tenantId?: string
   enabled?: boolean
+  onError?: (message: string) => void
 }
 
 function upsertMessage(messages: ChatMessageDto[], incoming: ChatMessageDto): ChatMessageDto[] {
@@ -45,7 +46,7 @@ function socialCommentKey(comment: SocialCommentPayload): string {
 }
 
 export function useStudioChat(options: UseStudioChatOptions) {
-  const { sessionId, userId, displayName, role, tenantId, enabled = true } = options
+  const { sessionId, userId, displayName, role, tenantId, enabled = true, onError } = options
   const [connectionState, setConnectionState] = useState<StudioChatConnectionState>('idle')
   const [messages, setMessages] = useState<ChatMessageDto[]>([])
   const [socialComments, setSocialComments] = useState<SocialCommentPayload[]>([])
@@ -55,6 +56,16 @@ export function useStudioChat(options: UseStudioChatOptions) {
   const socketRef = useRef<Socket | null>(null)
   const socialIdsRef = useRef<Set<string>>(new Set())
   const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const onErrorRef = useRef(onError)
+
+  useEffect(() => {
+    onErrorRef.current = onError
+  }, [onError])
+
+  const reportError = useCallback((message: string) => {
+    setLastError(message)
+    onErrorRef.current?.(message)
+  }, [])
 
   const emit = useCallback(
     <T extends StudioChatClientEventType>(
@@ -126,7 +137,7 @@ export function useStudioChat(options: UseStudioChatOptions) {
     const wsUrl = getStudioChatWsUrl()
     if (!wsUrl) {
       setConnectionState('error')
-      setLastError('Studio chat WebSocket URL is not configured.')
+      reportError('Studio chat WebSocket URL is not configured.')
       return
     }
 
@@ -164,7 +175,7 @@ export function useStudioChat(options: UseStudioChatOptions) {
 
     const handleConnectError = (error: Error) => {
       setConnectionState('error')
-      setLastError(error.message)
+      reportError(error.message)
     }
 
     const handleSignal = (raw: unknown) => {
@@ -209,7 +220,7 @@ export function useStudioChat(options: UseStudioChatOptions) {
         }
         case 'chat.error': {
           const payload = (raw as StudioChatServerEnvelope<'chat.error'>).payload
-          setLastError(payload.message)
+          reportError(payload.message)
           break
         }
         case 'chat.typing': {
@@ -262,7 +273,7 @@ export function useStudioChat(options: UseStudioChatOptions) {
         }
         case 'session.error': {
           const payload = (raw as StudioChatServerEnvelope<'session.error'>).payload
-          setLastError(payload.message)
+          reportError(payload.message)
           break
         }
         default:
@@ -291,7 +302,7 @@ export function useStudioChat(options: UseStudioChatOptions) {
       typingTimersRef.current.forEach((timer) => clearTimeout(timer))
       typingTimersRef.current.clear()
     }
-  }, [enabled, sessionId, userId, displayName, role, tenantId])
+  }, [enabled, sessionId, userId, displayName, role, tenantId, reportError])
 
   return {
     connectionState,
