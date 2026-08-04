@@ -26,6 +26,7 @@ import { useSceneStore } from '@/hooks/useSceneStore'
 import { useIsDrawerMode } from '@/hooks/useBreakpoint'
 import { useTenant } from '@/context/TenantProvider'
 import { useStudioChat } from '@/hooks/useStudioChat'
+import { useSocialChatOverlay } from '@/hooks/useSocialChatOverlay'
 import { isStudioChatEnabled } from '@/lib/studioChatEnv'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
@@ -37,6 +38,7 @@ import {
   getLocalTenantConfiguration,
   persistDestinationsFromStream,
   persistLayout,
+  persistGraphics,
   setPersistenceSessionId,
 } from '@/lib/persistenceSync'
 import {
@@ -62,6 +64,7 @@ import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
 import type { StudioSessionContext } from '@/types/session'
 import type { LayoutType } from '@/types/session'
+import type { ChatGraphic } from '@/types/graphics'
 import type { DeviceSelection } from '@/types/devices'
 
 interface StudioLayoutProps {
@@ -209,6 +212,29 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     tenantId: tenantId ?? undefined,
     enabled: isStudioChatEnabled(),
     onError: (message) => toast.error(message),
+  })
+
+  const handleChatOverlayUpdated = useCallback(
+    (chat: ChatGraphic) => {
+      graphicsStore.patchGraphics({ chat })
+    },
+    [graphicsStore.patchGraphics],
+  )
+
+  const handleChatOverlayPersist = useCallback(
+    (chat: ChatGraphic) => {
+      void persistGraphics({ chat }, sessionId, sceneStore.activeSceneId)
+    },
+    [sceneStore.activeSceneId, sessionId],
+  )
+
+  const socialChatOverlay = useSocialChatOverlay({
+    sessionId,
+    isHost: context.isHost,
+    comments: studioChat.socialComments,
+    initialEnabled: Boolean(graphicsStore.graphics?.chat?.enabled),
+    onChatUpdated: handleChatOverlayUpdated,
+    onPersistChat: handleChatOverlayPersist,
   })
 
   const activeSceneSources = useMemo(
@@ -781,6 +807,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           hostPeerId={hostPeerId}
           participants={participants}
           chat={studioChat}
+          socialChatOverlay={context.isHost ? socialChatOverlay : undefined}
         />
       </div>
     </div>

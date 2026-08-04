@@ -60,6 +60,11 @@ interface StudioSidebarProps {
   hostPeerId?: string
   participants?: ParticipantMedia[]
   chat?: StudioChatStore
+  socialChatOverlay?: {
+    enabled: boolean
+    syncing: boolean
+    setOverlayEnabled: (enabled: boolean) => Promise<void>
+  }
 }
 
 const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
@@ -138,6 +143,7 @@ export function StudioSidebar({
   hostPeerId,
   participants = [],
   chat,
+  socialChatOverlay,
 }: StudioSidebarProps) {
   const drawerMode = useIsDrawerMode()
   const defaultExpanded = usePanelDefaultExpanded()
@@ -242,6 +248,7 @@ export function StudioSidebar({
               onSubTabChange={setChatSubTab}
               participantUnread={participantUnread}
               socialUnread={socialUnread}
+              socialChatOverlay={socialChatOverlay}
             />
           )}
         </div>

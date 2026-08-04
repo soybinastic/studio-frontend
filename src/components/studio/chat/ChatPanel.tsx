@@ -18,6 +18,12 @@ import { cn } from '@/lib/utils'
 
 type StudioChatStore = ReturnType<typeof useStudioChat>
 
+interface SocialChatOverlayControl {
+  enabled: boolean
+  syncing: boolean
+  setOverlayEnabled: (enabled: boolean) => Promise<void>
+}
+
 interface ChatPanelProps {
   sessionId: string
   isHost: boolean
@@ -29,6 +35,7 @@ interface ChatPanelProps {
   onSubTabChange: (tab: ChatSubTab) => void
   participantUnread?: number
   socialUnread?: number
+  socialChatOverlay?: SocialChatOverlayControl
   className?: string
 }
 
@@ -43,6 +50,7 @@ export function ChatPanel({
   onSubTabChange,
   participantUnread = 0,
   socialUnread = 0,
+  socialChatOverlay,
   className,
 }: ChatPanelProps) {
   const [privateRecipientId, setPrivateRecipientId] = useState<string | null>(null)
@@ -201,6 +209,12 @@ export function ChatPanel({
             activeDestinations={socialOutbound.destinations}
             subscribedPlatforms={chat.subscribedPlatforms}
             sessionError={chat.sessionError}
+            showOverlayToggle={isHost}
+            overlayEnabled={socialChatOverlay?.enabled ?? false}
+            overlaySyncing={socialChatOverlay?.syncing ?? false}
+            onOverlayEnabledChange={(enabled) => {
+              void socialChatOverlay?.setOverlayEnabled(enabled)
+            }}
             className="min-h-0 flex-1"
           />
           {isHost ? (

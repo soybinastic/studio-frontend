@@ -83,11 +83,17 @@ export function useGraphicsStore(
     setGraphics(mergeGraphicsState(emptyGraphicsState(), state ?? {}))
   }, [])
 
+  const patchGraphics = useCallback((partial: Partial<GraphicsState>) => {
+    skipPollUntilRef.current = Date.now() + POLL_SKIP_MS
+    setGraphics((current) => mergeGraphicsState(current ?? emptyGraphicsState(), partial))
+  }, [])
+
   return {
     graphics,
     updateLayer,
     updateLayers,
     applyGraphics,
+    patchGraphics,
     isSyncing: sync.isSyncing,
     refresh,
   }

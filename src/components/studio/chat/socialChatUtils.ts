@@ -1,5 +1,9 @@
+import type { ChatGraphic } from '@/types/graphics'
 import type { SocialCommentPayload, SocialPlatform } from '@/types/studio-chat-signal'
 import { MESSAGE_GROUP_WINDOW_MS, getInitials } from '@/components/studio/chat/chatUtils'
+
+/** Compositor chat panel renders at most this many lines. */
+export const CHAT_OVERLAY_MESSAGE_LIMIT = 20
 
 export type SocialPlatformFilter = 'all' | SocialPlatform
 
@@ -121,4 +125,15 @@ export function formatSocialSenderName(comment: SocialCommentPayload): string {
 
 export function getSocialCommentInitials(comment: SocialCommentPayload): string {
   return getInitials(formatSocialSenderName(comment))
+}
+
+export function socialCommentsToOverlayMessages(
+  comments: SocialCommentPayload[],
+): ChatGraphic['messages'] {
+  return sortSocialComments(comments)
+    .slice(-CHAT_OVERLAY_MESSAGE_LIMIT)
+    .map((comment) => ({
+      author: `${formatSocialSenderName(comment)} · ${PLATFORM_LABELS[comment.platform]}`,
+      text: comment.message,
+    }))
 }

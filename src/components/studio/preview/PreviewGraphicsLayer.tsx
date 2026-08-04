@@ -3,6 +3,7 @@ import type { GraphicsState } from '@/types/graphics'
 import {
   backgroundShouldShow,
   bannerShouldShow,
+  chatShouldShow,
   logoShouldShow,
   overlayShouldShow,
   qrShouldShow,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/graphics'
 import { PreviewBackgroundLayer } from '@/components/studio/preview/PreviewBackgroundLayer'
 import { PreviewBannerLayer } from '@/components/studio/preview/PreviewBannerLayer'
+import { PreviewChatLayer } from '@/components/studio/preview/PreviewChatLayer'
 import { PreviewTickerLayer } from '@/components/studio/preview/PreviewTickerLayer'
 import { QR_CANVAS, qrPreviewRect } from '@/lib/qrGeometry'
 import { getLogoPlacement } from '@/lib/logoPresets'
@@ -37,6 +39,7 @@ export function PreviewGraphicsLayer({ layout, graphics, variant }: PreviewGraph
     qrShouldShow(graphics.qr) && graphics.qr ? qrPreviewRect(graphics.qr) : null
   const logoPlacement =
     logoShouldShow(graphics.logo) && graphics.logo ? getLogoPlacement(graphics.logo) : null
+  const chatActive = chatShouldShow(graphics.chat)
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[15]">
@@ -67,8 +70,10 @@ export function PreviewGraphicsLayer({ layout, graphics, variant }: PreviewGraph
       )}
 
       {tickerShouldShow(graphics.ticker) && graphics.ticker && (
-        <PreviewTickerLayer ticker={graphics.ticker} />
+        <PreviewTickerLayer ticker={graphics.ticker} chatActive={chatActive} />
       )}
+
+      {chatActive && graphics.chat && <PreviewChatLayer chat={graphics.chat} />}
 
       {qrRect && graphics.qr?.url && (
         <img

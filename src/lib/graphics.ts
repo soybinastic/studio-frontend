@@ -2,6 +2,7 @@ import type { LayoutType } from '@/types/session'
 import type {
   BackgroundGraphic,
   BannerGraphic,
+  ChatGraphic,
   GraphicsState,
   LogoGraphic,
   OverlayGraphic,
@@ -53,6 +54,10 @@ export function bannerShouldShow(config: BannerGraphic | null | undefined): bool
 export function tickerShouldShow(config: TickerGraphic | null | undefined): boolean {
   if (!config?.tickerEnabled) return false
   return Boolean(config.tickerText?.trim())
+}
+
+export function chatShouldShow(config: ChatGraphic | null | undefined): boolean {
+  return Boolean(config?.enabled)
 }
 
 export function layoutSupportsBackground(layout: LayoutType): boolean {
