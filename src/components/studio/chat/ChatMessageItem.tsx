@@ -66,15 +66,69 @@ export function ChatMessageItem({
   const bubble = (
     <div
       className={cn(
-        'relative max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed',
+        'relative w-fit max-w-[90%] rounded-2xl px-3 py-2 text-xs leading-relaxed',
         isOwn
           ? 'rounded-br-md bg-primary text-primary-foreground'
           : 'rounded-bl-md bg-muted/80 text-foreground',
         isPrivate && !isOwn && 'ring-1 ring-violet-500/30',
         isPrivate && isOwn && 'bg-violet-600 text-white dark:bg-violet-700',
         isHidden && isHost && 'opacity-60',
+        hasModerationActions && 'pr-6',
       )}
     >
+      {hasModerationActions && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'absolute right-0.5 top-0.5 h-5 w-5 p-0',
+                'opacity-60 hover:opacity-100 focus-visible:opacity-100',
+                isOwn
+                  ? 'text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground'
+                  : 'hover:bg-muted',
+              )}
+              aria-label="Message actions"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
+            {!isOwn && onReplyPrivate && (
+              <DropdownMenuItem onClick={() => onReplyPrivate(message.senderId)}>
+                <MessageSquareReply className="h-3.5 w-3.5" />
+                Reply privately
+              </DropdownMenuItem>
+            )}
+            {isHost && message.status === 'active' && onHide && (
+              <DropdownMenuItem onClick={() => onHide(message.id)}>
+                <EyeOff className="h-3.5 w-3.5" />
+                Hide
+              </DropdownMenuItem>
+            )}
+            {isHost && message.status === 'hidden' && onUnhide && (
+              <DropdownMenuItem onClick={() => onUnhide(message.id)}>
+                <Eye className="h-3.5 w-3.5" />
+                Unhide
+              </DropdownMenuItem>
+            )}
+            {isHost && onDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       {showHeader && !isOwn && (
         <div className="mb-1 flex flex-wrap items-center gap-1">
           <span className="text-[10px] font-semibold">{senderName}</span>
@@ -133,9 +187,9 @@ export function ChatMessageItem({
     <>
       <div
         className={cn(
-          'group flex gap-2',
+          'group flex w-full gap-2',
           isOwn ? 'flex-row-reverse' : 'flex-row',
-          !showHeader && (isOwn ? 'mt-0.5' : 'mt-0.5 pl-9'),
+          !showHeader && !isOwn && 'pl-9',
         )}
       >
         {!isOwn && (
@@ -148,59 +202,9 @@ export function ChatMessageItem({
           </div>
         )}
 
-        <div className={cn('flex min-w-0 flex-col', isOwn ? 'items-end' : 'items-start')}>
+        <div className={cn('flex min-w-0 flex-1 flex-col', isOwn ? 'items-end' : 'items-start')}>
           {bubble}
         </div>
-
-        {hasModerationActions && (
-          <div className={cn('flex shrink-0 self-center', isOwn ? 'order-first' : '')}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 opacity-60 hover:opacity-100"
-                  aria-label="Message actions"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
-                {!isOwn && onReplyPrivate && (
-                  <DropdownMenuItem onClick={() => onReplyPrivate(message.senderId)}>
-                    <MessageSquareReply className="h-3.5 w-3.5" />
-                    Reply privately
-                  </DropdownMenuItem>
-                )}
-                {isHost && message.status === 'active' && onHide && (
-                  <DropdownMenuItem onClick={() => onHide(message.id)}>
-                    <EyeOff className="h-3.5 w-3.5" />
-                    Hide
-                  </DropdownMenuItem>
-                )}
-                {isHost && message.status === 'hidden' && onUnhide && (
-                  <DropdownMenuItem onClick={() => onUnhide(message.id)}>
-                    <Eye className="h-3.5 w-3.5" />
-                    Unhide
-                  </DropdownMenuItem>
-                )}
-                {isHost && onDelete && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={() => setDeleteOpen(true)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
       </div>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
