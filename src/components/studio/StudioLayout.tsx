@@ -71,7 +71,8 @@ interface StudioLayoutProps {
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
   const { configuration, refreshConfiguration, tenantId } = useTenant()
-  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh } = useCmsEmbedBridge()
+  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh, notifyStudioSession } =
+    useCmsEmbedBridge()
   const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
@@ -128,6 +129,11 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     setPersistenceSessionId(sessionId)
     return () => setPersistenceSessionId(null)
   }, [sessionId])
+
+  useEffect(() => {
+    if (!isEmbedded || !sessionId) return
+    notifyStudioSession(sessionId)
+  }, [isEmbedded, sessionId, notifyStudioSession])
 
   useEffect(() => {
     if (!context.isHost || hydrationStartedRef.current) return
@@ -447,6 +453,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 tenantId,
                 platformConnections,
                 requestFacebookLiveRefresh,
+                sessionId,
               )
             } catch (err) {
               toast.error(
@@ -463,6 +470,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 tenantId,
                 platformConnections,
                 requestYouTubeLiveRefresh,
+                sessionId,
               )
             } catch (err) {
               if (shouldShowYouTubeGoLiveDialog(isEmbedded)) {
@@ -536,6 +544,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       syncStartStreaming,
       refreshOutput,
       tenantId,
+      sessionId,
       platformConnections,
       refreshConfiguration,
       savedDestinations,

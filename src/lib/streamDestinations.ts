@@ -254,6 +254,7 @@ export async function refreshFacebookStreamKeys(
   tenantId: string,
   platformConnections: PersistedPlatformConnection[] = [],
   refreshFn: FacebookLiveRefreshFn,
+  studioSessionId?: string,
 ): Promise<void> {
   const facebookConnections = platformConnections.filter(
     (connection) =>
@@ -265,7 +266,10 @@ export async function refreshFacebookStreamKeys(
   for (const connection of facebookConnections) {
     const credentials = await getPlatformEmbedCredentials(tenantId, connection.connection_id)
     const hints = buildFacebookRefreshHints(connection, credentials)
-    const payload = await refreshFn(hints)
+    const payload = await refreshFn({
+      ...hints,
+      studioSessionId: studioSessionId?.trim() || hints.studioSessionId,
+    })
     await importPlatformConnectionFromEmbed(
       tenantId,
       mapEmbedPayloadToImportRequest('facebook', payload),
@@ -277,13 +281,17 @@ export async function refreshYouTubeStreamKeys(
   tenantId: string,
   platformConnections: PersistedPlatformConnection[] = [],
   refreshFn: YouTubeLiveRefreshFn,
+  studioSessionId?: string,
 ): Promise<void> {
   const youtubeConnections = platformConnections.filter(shouldRefreshYouTubeStreamOnGoLive)
 
   for (const connection of youtubeConnections) {
     const credentials = await getPlatformEmbedCredentials(tenantId, connection.connection_id)
     const hints = buildYouTubeRefreshHints(connection, credentials)
-    const payload = await refreshFn(hints)
+    const payload = await refreshFn({
+      ...hints,
+      studioSessionId: studioSessionId?.trim() || hints.studioSessionId,
+    })
     await importPlatformConnectionFromEmbed(
       tenantId,
       mapEmbedPayloadToImportRequest('youtube', payload),

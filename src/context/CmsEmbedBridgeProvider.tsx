@@ -100,6 +100,8 @@ interface CmsEmbedBridgeContextValue {
   ) => Promise<FacebookConnectFlowResult>
   requestFacebookLiveRefresh: (hints: FacebookLiveRefreshHints) => Promise<PlatformConnectionPayload>
   requestYouTubeLiveRefresh: (hints: YouTubeLiveRefreshHints) => Promise<PlatformConnectionPayload>
+  /** Notify CMS of compositor session id for studio-chat social registration. */
+  notifyStudioSession: (studioSessionId: string) => void
   cancelActivePlatformConnect: () => void
 }
 
@@ -230,6 +232,20 @@ export function CmsEmbedBridgeProvider({
     }
     postToParent(ready)
   }, [isEmbedded, sessionId, tenantId])
+
+  const notifyStudioSession = useCallback(
+    (studioSessionId: string) => {
+      if (!isEmbedded) return
+      const trimmed = studioSessionId.trim()
+      if (!trimmed) return
+      postToParent({
+        type: 'studio-embed/v1/studio-session',
+        studioSessionId: trimmed,
+        tenantId: tenantId ?? undefined,
+      })
+    },
+    [isEmbedded, tenantId],
+  )
 
   useEffect(() => {
     if (!isEmbedded) return
@@ -595,6 +611,7 @@ export function CmsEmbedBridgeProvider({
         type: 'studio-embed/v1/refresh-facebook-live',
         requestId,
         tenantId: tenantId ?? undefined,
+        studioSessionId: hints.studioSessionId,
         accessToken: hints.accessToken,
         streamingTargetId: hints.streamingTargetId,
         facebookUserId: hints.facebookUserId,
@@ -641,6 +658,7 @@ export function CmsEmbedBridgeProvider({
         type: 'studio-embed/v1/refresh-youtube-live',
         requestId,
         tenantId: tenantId ?? undefined,
+        studioSessionId: hints.studioSessionId,
         accessToken: hints.accessToken,
         refreshToken: hints.refreshToken,
         channelId: hints.channelId,
@@ -681,6 +699,7 @@ export function CmsEmbedBridgeProvider({
       requestFacebookConnect,
       requestFacebookLiveRefresh,
       requestYouTubeLiveRefresh,
+      notifyStudioSession,
       cancelActivePlatformConnect,
     }),
     [
@@ -690,6 +709,7 @@ export function CmsEmbedBridgeProvider({
       requestFacebookConnect,
       requestFacebookLiveRefresh,
       requestYouTubeLiveRefresh,
+      notifyStudioSession,
       cancelActivePlatformConnect,
     ],
   )
@@ -713,6 +733,7 @@ export function useCmsEmbedBridge(): CmsEmbedBridgeContextValue {
         Promise.reject(new Error('CmsEmbedBridgeProvider is not mounted')),
       requestYouTubeLiveRefresh: () =>
         Promise.reject(new Error('CmsEmbedBridgeProvider is not mounted')),
+      notifyStudioSession: () => undefined,
       cancelActivePlatformConnect: () => undefined,
     }
   }
