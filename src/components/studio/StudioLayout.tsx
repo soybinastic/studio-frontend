@@ -46,6 +46,7 @@ import {
   refreshFacebookStreamKeys,
   refreshTwitchStreamKeys,
   refreshYouTubeStreamKeys,
+  registerTwitchChatForGoLive,
   toStreamDestinationInputs,
   willStreamToFacebook,
   willStreamToYouTube,
@@ -71,7 +72,7 @@ interface StudioLayoutProps {
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
   const { configuration, refreshConfiguration, tenantId } = useTenant()
-  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh, notifyStudioSession } =
+  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh, registerTwitchChat, notifyStudioSession } =
     useCmsEmbedBridge()
   const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
@@ -532,6 +533,21 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           twitchChatEnabled: hasTwitchStreamDestination(resolvedDestinations),
         })
         if (result) {
+          if (isEmbedded && tenantId && isPersistenceEnabled()) {
+            try {
+              const freshConfig = getLocalTenantConfiguration()
+              await registerTwitchChatForGoLive(
+                tenantId,
+                freshConfig?.platform_connections ?? platformConnections,
+                freshConfig?.destinations ?? savedDestinations,
+                registerTwitchChat,
+                sessionId,
+                resolvedDestinations,
+              )
+            } catch (err) {
+              console.warn('[StudioLayout] Twitch chat registration failed:', err)
+            }
+          }
           toast.success(`Live on ${formatStreamDestinationSummary(resolvedDestinations)}`)
         }
       } finally {
@@ -551,6 +567,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       isEmbedded,
       requestFacebookLiveRefresh,
       requestYouTubeLiveRefresh,
+      registerTwitchChat,
     ],
   )
 

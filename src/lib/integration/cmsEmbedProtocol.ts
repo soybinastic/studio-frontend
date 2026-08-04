@@ -106,6 +106,27 @@ export interface EmbedRefreshYouTubeLiveMessage {
   description?: string
 }
 
+export interface TwitchChatRegisterHints {
+  channelLogin: string
+  accessToken?: string
+  nick?: string
+  broadcasterUserId?: string
+  accountName?: string
+  /** Compositor session id for studio-chat social registration. */
+  studioSessionId?: string
+}
+
+export interface EmbedRegisterTwitchChatMessage {
+  type: 'studio-embed/v1/register-twitch-chat'
+  tenantId?: string
+  studioSessionId?: string
+  channelLogin: string
+  accessToken?: string
+  nick?: string
+  broadcasterUserId?: string
+  accountName?: string
+}
+
 export interface EmbedFacebookPageOption {
   id: string
   name: string
@@ -185,6 +206,7 @@ export type EmbedOutboundMessage =
   | EmbedSelectFacebookPageMessage
   | EmbedRefreshFacebookLiveMessage
   | EmbedRefreshYouTubeLiveMessage
+  | EmbedRegisterTwitchChatMessage
   | EmbedYouTubeOAuthCodeMessage
 
 export type EmbedInboundMessage =
