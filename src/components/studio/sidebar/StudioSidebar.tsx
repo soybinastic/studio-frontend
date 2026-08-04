@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Image, Music2, Plus, Users } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Image, MessageSquare, Music2, Plus, Users } from 'lucide-react'
 import { BackgroundMusicPanel } from '@/components/studio/audio/BackgroundMusicPanel'
+import { ChatPanel } from '@/components/studio/chat/ChatPanel'
 import { GraphicsPanel } from '@/components/studio/sidebar/GraphicsPanel'
 import { SourceTileList } from '@/components/studio/sidebar/SourceTileList'
 import { SourceCard, SOURCE_TYPES } from '@/components/studio/sidebar/SourceCard'
@@ -12,7 +13,14 @@ import type { LayoutType } from '@/types/session'
 import type { SidebarTab } from '@/types/studio'
 import type { StudioTileSource } from '@/types/participants'
 import type { GraphicLayerKey, GraphicsState } from '@/types/graphics'
+import type { ParticipantMedia } from '@/types/session'
+import type { useStudioChat } from '@/hooks/useStudioChat'
+import { useChatUnread } from '@/hooks/useChatUnread'
+import { UnreadBadge } from '@/components/studio/chat/UnreadBadge'
+import type { ChatSubTab } from '@/components/studio/chat/ChatSubTabs'
 import { cn } from '@/lib/utils'
+
+type StudioChatStore = ReturnType<typeof useStudioChat>
 
 interface StudioSidebarProps {
   layout: LayoutType
@@ -47,6 +55,11 @@ interface StudioSidebarProps {
   isSyncing?: boolean
   drawerOpen?: boolean
   onDrawerOpenChange?: (open: boolean) => void
+  sessionId?: string
+  currentUserId?: string
+  hostPeerId?: string
+  participants?: ParticipantMedia[]
+  chat?: StudioChatStore
 }
 
 const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
@@ -54,16 +67,19 @@ const TABS: { id: SidebarTab; label: string; icon: typeof Users }[] = [
   { id: 'participants', label: 'People', icon: Users },
   { id: 'sources', label: 'Sources', icon: Plus },
   { id: 'audio', label: 'Audio', icon: Music2 },
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
 ]
 
 function SidebarTabs({
   activeTab,
   onTabChange,
   compact = false,
+  chatUnread = 0,
 }: {
   activeTab: SidebarTab
   onTabChange: (tab: SidebarTab) => void
   compact?: boolean
+  chatUnread?: number
 }) {
   return (
     <div className={cn('flex rounded-lg bg-muted/50 p-0.5', compact ? 'flex-col gap-0.5' : 'w-full')}>
@@ -73,17 +89,25 @@ function SidebarTabs({
           type="button"
           onClick={() => onTabChange(tab.id)}
           className={cn(
-            'flex items-center justify-center gap-1 rounded-md font-medium transition-all',
+            'relative flex items-center justify-center gap-1 rounded-md font-medium transition-all',
             compact ? 'h-9 w-9' : 'flex-1 flex-col gap-0.5 px-1 py-1.5 text-[10px] sm:text-xs',
             activeTab === tab.id
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground',
           )}
-          aria-label={tab.label}
+          aria-label={tab.id === 'chat' && chatUnread > 0 ? `${tab.label}, ${chatUnread} unread` : tab.label}
           title={tab.label}
         >
           <tab.icon className="h-3.5 w-3.5" />
-          {!compact && tab.label}
+          {!compact && (
+            <span className="flex items-center gap-0.5">
+              {tab.label}
+              {tab.id === 'chat' && <UnreadBadge count={chatUnread} />}
+            </span>
+          )}
+          {compact && tab.id === 'chat' && chatUnread > 0 && (
+            <UnreadBadge count={chatUnread} className="absolute -right-0.5 -top-0.5" />
+          )}
         </button>
       ))}
     </div>
@@ -109,12 +133,35 @@ export function StudioSidebar({
   isSyncing,
   drawerOpen = false,
   onDrawerOpenChange,
+  sessionId,
+  currentUserId,
+  hostPeerId,
+  participants = [],
+  chat,
 }: StudioSidebarProps) {
   const drawerMode = useIsDrawerMode()
   const defaultExpanded = usePanelDefaultExpanded()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [activeTab, setActiveTab] = useState<SidebarTab>('participants')
+  const [chatSubTab, setChatSubTab] = useState<ChatSubTab>('participants')
   const showExpandedContent = drawerMode || expanded
+
+  const isChatTabActive = activeTab === 'chat' && showExpandedContent
+
+  const { participantUnread, socialUnread, totalUnread } = useChatUnread({
+    messages: chat?.messages ?? [],
+    socialComments: chat?.socialComments ?? [],
+    currentUserId: currentUserId ?? '',
+    isChatTabActive,
+    chatSubTab,
+  })
+
+  const handleTabChange = useCallback((tab: SidebarTab) => {
+    setActiveTab(tab)
+    if (tab === 'chat') {
+      setExpanded(true)
+    }
+  }, [])
 
   useEffect(() => {
     setExpanded(defaultExpanded)
@@ -130,10 +177,15 @@ export function StudioSidebar({
       drawerOpen={drawerOpen}
       onDrawerOpenChange={onDrawerOpenChange}
       drawerTitle="Studio controls"
-      header={<SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />}
+      header={<SidebarTabs activeTab={activeTab} onTabChange={handleTabChange} chatUnread={totalUnread} />}
     >
       {showExpandedContent ? (
-        <div className="studio-panel-scroll flex-1 overflow-y-auto p-3">
+        <div
+          className={cn(
+            'studio-panel-scroll flex-1 p-3',
+            activeTab === 'chat' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto',
+          )}
+        >
           {activeTab === 'graphics' && (
             <GraphicsPanel
               layout={layout}
@@ -177,16 +229,31 @@ export function StudioSidebar({
           {activeTab === 'audio' && (
             <BackgroundMusicPanel isHost={isHost} store={backgroundMusicStore} />
           )}
+
+          {activeTab === 'chat' && chat && sessionId && currentUserId && hostPeerId && (
+            <ChatPanel
+              isHost={isHost}
+              currentUserId={currentUserId}
+              hostPeerId={hostPeerId}
+              participants={participants}
+              chat={chat}
+              subTab={chatSubTab}
+              onSubTabChange={setChatSubTab}
+              participantUnread={participantUnread}
+              socialUnread={socialUnread}
+            />
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center py-2">
           <SidebarTabs
             activeTab={activeTab}
             onTabChange={(tab) => {
-              setActiveTab(tab)
+              handleTabChange(tab)
               setExpanded(true)
             }}
             compact
+            chatUnread={totalUnread}
           />
         </div>
       )}

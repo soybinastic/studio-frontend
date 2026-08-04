@@ -25,6 +25,8 @@ import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
 import { useIsDrawerMode } from '@/hooks/useBreakpoint'
 import { useTenant } from '@/context/TenantProvider'
+import { useStudioChat } from '@/hooks/useStudioChat'
+import { isStudioChatEnabled } from '@/lib/studioChatEnv'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
@@ -191,6 +193,16 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     )
     return hostParticipant?.peerId ?? participants.find((p) => !p.isLocal)?.peerId ?? context.peerId
   }, [context, participants])
+
+  const studioChat = useStudioChat({
+    sessionId,
+    userId: context.peerId,
+    displayName: context.displayName,
+    role: context.isHost ? 'host' : 'participant',
+    tenantId: tenantId ?? undefined,
+    enabled: isStudioChatEnabled(),
+    onError: (message) => toast.error(message),
+  })
 
   const activeSceneSources = useMemo(
     () => sceneStore.scenes.find((scene) => scene.is_active)?.sources,
@@ -738,6 +750,11 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing || backgroundMusicStore.isMutating}
           drawerOpen={controlsDrawerOpen}
           onDrawerOpenChange={setControlsDrawerOpen}
+          sessionId={sessionId}
+          currentUserId={context.peerId}
+          hostPeerId={hostPeerId}
+          participants={participants}
+          chat={studioChat}
         />
       </div>
     </div>
