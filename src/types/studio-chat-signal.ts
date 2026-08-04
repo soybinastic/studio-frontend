@@ -30,6 +30,7 @@ export type SocialCommentSource =
   | 'facebook_graph_poll'
   | 'youtube_api'
   | 'twitch_irc'
+  | 'host_outbound'
 
 export interface SocialCommentPayload {
   platform: SocialPlatform

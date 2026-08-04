@@ -10,6 +10,13 @@ export interface EmbedReadyMessage {
   tenantId?: string
 }
 
+/** Compositor session id — must match studio-chat WS subscribe room. */
+export interface EmbedStudioSessionMessage {
+  type: 'studio-embed/v1/studio-session'
+  studioSessionId: string
+  tenantId?: string
+}
+
 export interface EmbedConfigMessage {
   type: 'studio-embed/v1/config'
   delegatePlatforms: EmbedPlatform[]
@@ -52,6 +59,8 @@ export interface FacebookLiveRefreshHints {
   accountName?: string
   platformLogin?: string
   tokenExpiresAt?: string
+  /** Compositor session id for studio-chat social registration. */
+  studioSessionId?: string
 }
 
 export interface YouTubeLiveRefreshHints {
@@ -63,12 +72,15 @@ export interface YouTubeLiveRefreshHints {
   tokenExpiresAt?: string
   title?: string
   description?: string
+  /** Compositor session id for studio-chat social registration. */
+  studioSessionId?: string
 }
 
 export interface EmbedRefreshFacebookLiveMessage {
   type: 'studio-embed/v1/refresh-facebook-live'
   requestId: string
   tenantId?: string
+  studioSessionId?: string
   accessToken: string
   streamingTargetId: string
   facebookUserId?: string
@@ -83,6 +95,7 @@ export interface EmbedRefreshYouTubeLiveMessage {
   type: 'studio-embed/v1/refresh-youtube-live'
   requestId: string
   tenantId?: string
+  studioSessionId?: string
   accessToken: string
   refreshToken?: string
   channelId?: string
@@ -91,6 +104,27 @@ export interface EmbedRefreshYouTubeLiveMessage {
   tokenExpiresAt?: string
   title?: string
   description?: string
+}
+
+export interface TwitchChatRegisterHints {
+  channelLogin: string
+  accessToken?: string
+  nick?: string
+  broadcasterUserId?: string
+  accountName?: string
+  /** Compositor session id for studio-chat social registration. */
+  studioSessionId?: string
+}
+
+export interface EmbedRegisterTwitchChatMessage {
+  type: 'studio-embed/v1/register-twitch-chat'
+  tenantId?: string
+  studioSessionId?: string
+  channelLogin: string
+  accessToken?: string
+  nick?: string
+  broadcasterUserId?: string
+  accountName?: string
 }
 
 export interface EmbedFacebookPageOption {
@@ -166,11 +200,13 @@ export function isEmbedErrorHandledByParent(err: unknown): boolean {
 
 export type EmbedOutboundMessage =
   | EmbedReadyMessage
+  | EmbedStudioSessionMessage
   | EmbedConnectPlatformMessage
   | EmbedCancelPlatformConnectMessage
   | EmbedSelectFacebookPageMessage
   | EmbedRefreshFacebookLiveMessage
   | EmbedRefreshYouTubeLiveMessage
+  | EmbedRegisterTwitchChatMessage
   | EmbedYouTubeOAuthCodeMessage
 
 export type EmbedInboundMessage =

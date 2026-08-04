@@ -18,9 +18,11 @@ import {
   type EmbedReadyMessage,
   type EmbedRefreshFacebookLiveMessage,
   type EmbedRefreshYouTubeLiveMessage,
+  type EmbedRegisterTwitchChatMessage,
   type FacebookEmbedTarget,
   type FacebookLiveRefreshHints,
   type YouTubeLiveRefreshHints,
+  type TwitchChatRegisterHints,
   type PlatformConnectionPayload,
   EmbedConnectError,
 } from '@/lib/integration/cmsEmbedProtocol'
@@ -100,6 +102,10 @@ interface CmsEmbedBridgeContextValue {
   ) => Promise<FacebookConnectFlowResult>
   requestFacebookLiveRefresh: (hints: FacebookLiveRefreshHints) => Promise<PlatformConnectionPayload>
   requestYouTubeLiveRefresh: (hints: YouTubeLiveRefreshHints) => Promise<PlatformConnectionPayload>
+  /** Register Twitch IRC with studio-chat when going live (fire-and-forget). */
+  registerTwitchChat: (hints: TwitchChatRegisterHints) => void
+  /** Notify CMS of compositor session id for studio-chat social registration. */
+  notifyStudioSession: (studioSessionId: string) => void
   cancelActivePlatformConnect: () => void
 }
 
@@ -230,6 +236,20 @@ export function CmsEmbedBridgeProvider({
     }
     postToParent(ready)
   }, [isEmbedded, sessionId, tenantId])
+
+  const notifyStudioSession = useCallback(
+    (studioSessionId: string) => {
+      if (!isEmbedded) return
+      const trimmed = studioSessionId.trim()
+      if (!trimmed) return
+      postToParent({
+        type: 'studio-embed/v1/studio-session',
+        studioSessionId: trimmed,
+        tenantId: tenantId ?? undefined,
+      })
+    },
+    [isEmbedded, tenantId],
+  )
 
   useEffect(() => {
     if (!isEmbedded) return
@@ -595,6 +615,7 @@ export function CmsEmbedBridgeProvider({
         type: 'studio-embed/v1/refresh-facebook-live',
         requestId,
         tenantId: tenantId ?? undefined,
+        studioSessionId: hints.studioSessionId,
         accessToken: hints.accessToken,
         streamingTargetId: hints.streamingTargetId,
         facebookUserId: hints.facebookUserId,
@@ -641,6 +662,7 @@ export function CmsEmbedBridgeProvider({
         type: 'studio-embed/v1/refresh-youtube-live',
         requestId,
         tenantId: tenantId ?? undefined,
+        studioSessionId: hints.studioSessionId,
         accessToken: hints.accessToken,
         refreshToken: hints.refreshToken,
         channelId: hints.channelId,
@@ -673,6 +695,28 @@ export function CmsEmbedBridgeProvider({
     [clearPendingRefresh, isEmbedded, tenantId],
   )
 
+  const registerTwitchChat = useCallback(
+    (hints: TwitchChatRegisterHints) => {
+      if (!isEmbedded) {
+        return
+      }
+
+      const message: EmbedRegisterTwitchChatMessage = {
+        type: 'studio-embed/v1/register-twitch-chat',
+        tenantId: tenantId ?? undefined,
+        studioSessionId: hints.studioSessionId,
+        channelLogin: hints.channelLogin,
+        accessToken: hints.accessToken,
+        nick: hints.nick,
+        broadcasterUserId: hints.broadcasterUserId,
+        accountName: hints.accountName,
+      }
+
+      postToParent(message)
+    },
+    [isEmbedded, tenantId],
+  )
+
   const value = useMemo<CmsEmbedBridgeContextValue>(
     () => ({
       isEmbedded,
@@ -681,6 +725,8 @@ export function CmsEmbedBridgeProvider({
       requestFacebookConnect,
       requestFacebookLiveRefresh,
       requestYouTubeLiveRefresh,
+      registerTwitchChat,
+      notifyStudioSession,
       cancelActivePlatformConnect,
     }),
     [
@@ -690,6 +736,8 @@ export function CmsEmbedBridgeProvider({
       requestFacebookConnect,
       requestFacebookLiveRefresh,
       requestYouTubeLiveRefresh,
+      registerTwitchChat,
+      notifyStudioSession,
       cancelActivePlatformConnect,
     ],
   )
@@ -713,6 +761,8 @@ export function useCmsEmbedBridge(): CmsEmbedBridgeContextValue {
         Promise.reject(new Error('CmsEmbedBridgeProvider is not mounted')),
       requestYouTubeLiveRefresh: () =>
         Promise.reject(new Error('CmsEmbedBridgeProvider is not mounted')),
+      registerTwitchChat: () => undefined,
+      notifyStudioSession: () => undefined,
       cancelActivePlatformConnect: () => undefined,
     }
   }

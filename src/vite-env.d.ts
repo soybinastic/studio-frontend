@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_TENANT_NAME?: string
   readonly VITE_PERSISTENCE_ENABLED?: string
   readonly VITE_STREAM_DESTINATION_MODAL?: string
+  readonly VITE_STUDIO_CHAT_WS_URL?: string
 }
 
 interface ImportMeta {

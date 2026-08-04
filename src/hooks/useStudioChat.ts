@@ -10,7 +10,9 @@ import {
   STUDIO_CHAT_SIGNAL_EVENT,
   buildClientSignal,
   isStudioChatServerEnvelope,
+  type SessionErrorPayload,
   type SocialCommentPayload,
+  type SocialPlatform,
   type StudioChatClientEventType,
   type StudioChatClientPayloadMap,
   type StudioChatServerEnvelope,
@@ -50,6 +52,8 @@ export function useStudioChat(options: UseStudioChatOptions) {
   const [connectionState, setConnectionState] = useState<StudioChatConnectionState>('idle')
   const [messages, setMessages] = useState<ChatMessageDto[]>([])
   const [socialComments, setSocialComments] = useState<SocialCommentPayload[]>([])
+  const [subscribedPlatforms, setSubscribedPlatforms] = useState<SocialPlatform[]>([])
+  const [sessionError, setSessionError] = useState<SessionErrorPayload | null>(null)
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set())
   const [lastError, setLastError] = useState<string | null>(null)
 
@@ -143,6 +147,8 @@ export function useStudioChat(options: UseStudioChatOptions) {
 
     setConnectionState('connecting')
     setLastError(null)
+    setSessionError(null)
+    setSubscribedPlatforms([])
 
     const socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
@@ -249,6 +255,12 @@ export function useStudioChat(options: UseStudioChatOptions) {
           }
           break
         }
+        case 'session.subscribed': {
+          const payload = (raw as StudioChatServerEnvelope<'session.subscribed'>).payload
+          setSubscribedPlatforms(payload.subscribedPlatforms)
+          setSessionError(null)
+          break
+        }
         case 'social.comment': {
           const payload = (raw as StudioChatServerEnvelope<'social.comment'>).payload
           const key = socialCommentKey(payload)
@@ -273,6 +285,7 @@ export function useStudioChat(options: UseStudioChatOptions) {
         }
         case 'session.error': {
           const payload = (raw as StudioChatServerEnvelope<'session.error'>).payload
+          setSessionError(payload)
           reportError(payload.message)
           break
         }
@@ -308,6 +321,8 @@ export function useStudioChat(options: UseStudioChatOptions) {
     connectionState,
     messages,
     socialComments,
+    subscribedPlatforms,
+    sessionError,
     typingUserIds: [...typingUserIds],
     lastError,
     sendPublicMessage,

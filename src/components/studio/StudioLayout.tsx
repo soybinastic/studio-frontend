@@ -26,6 +26,7 @@ import { useSceneStore } from '@/hooks/useSceneStore'
 import { useIsDrawerMode } from '@/hooks/useBreakpoint'
 import { useTenant } from '@/context/TenantProvider'
 import { useStudioChat } from '@/hooks/useStudioChat'
+import { useSocialChatOverlay } from '@/hooks/useSocialChatOverlay'
 import { isStudioChatEnabled } from '@/lib/studioChatEnv'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
@@ -37,6 +38,7 @@ import {
   getLocalTenantConfiguration,
   persistDestinationsFromStream,
   persistLayout,
+  persistGraphics,
   setPersistenceSessionId,
 } from '@/lib/persistenceSync'
 import {
@@ -46,6 +48,7 @@ import {
   refreshFacebookStreamKeys,
   refreshTwitchStreamKeys,
   refreshYouTubeStreamKeys,
+  registerTwitchChatForGoLive,
   toStreamDestinationInputs,
   willStreamToFacebook,
   willStreamToYouTube,
@@ -61,6 +64,7 @@ import { clearStudioContext } from '@/lib/studioContext'
 import { endSession } from '@/api/sessions'
 import type { StudioSessionContext } from '@/types/session'
 import type { LayoutType } from '@/types/session'
+import type { ChatGraphic } from '@/types/graphics'
 import type { DeviceSelection } from '@/types/devices'
 
 interface StudioLayoutProps {
@@ -71,7 +75,8 @@ interface StudioLayoutProps {
 export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const navigate = useNavigate()
   const { configuration, refreshConfiguration, tenantId } = useTenant()
-  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh } = useCmsEmbedBridge()
+  const { isEmbedded, requestFacebookLiveRefresh, requestYouTubeLiveRefresh, registerTwitchChat, notifyStudioSession } =
+    useCmsEmbedBridge()
   const { setControls } = useStudioHeaderControls()
   const deviceStore = useDeviceStore()
   const [showDeviceSetup, setShowDeviceSetup] = useState(!deviceStore.isSetupComplete)
@@ -128,6 +133,11 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     setPersistenceSessionId(sessionId)
     return () => setPersistenceSessionId(null)
   }, [sessionId])
+
+  useEffect(() => {
+    if (!isEmbedded || !sessionId) return
+    notifyStudioSession(sessionId)
+  }, [isEmbedded, sessionId, notifyStudioSession])
 
   useEffect(() => {
     if (!context.isHost || hydrationStartedRef.current) return
@@ -202,6 +212,29 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     tenantId: tenantId ?? undefined,
     enabled: isStudioChatEnabled(),
     onError: (message) => toast.error(message),
+  })
+
+  const handleChatOverlayUpdated = useCallback(
+    (chat: ChatGraphic) => {
+      graphicsStore.patchGraphics({ chat })
+    },
+    [graphicsStore.patchGraphics],
+  )
+
+  const handleChatOverlayPersist = useCallback(
+    (chat: ChatGraphic) => {
+      void persistGraphics({ chat }, sessionId, sceneStore.activeSceneId)
+    },
+    [sceneStore.activeSceneId, sessionId],
+  )
+
+  const socialChatOverlay = useSocialChatOverlay({
+    sessionId,
+    isHost: context.isHost,
+    comments: studioChat.socialComments,
+    initialEnabled: Boolean(graphicsStore.graphics?.chat?.enabled),
+    onChatUpdated: handleChatOverlayUpdated,
+    onPersistChat: handleChatOverlayPersist,
   })
 
   const activeSceneSources = useMemo(
@@ -447,6 +480,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 tenantId,
                 platformConnections,
                 requestFacebookLiveRefresh,
+                sessionId,
               )
             } catch (err) {
               toast.error(
@@ -463,6 +497,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
                 tenantId,
                 platformConnections,
                 requestYouTubeLiveRefresh,
+                sessionId,
               )
             } catch (err) {
               if (shouldShowYouTubeGoLiveDialog(isEmbedded)) {
@@ -524,6 +559,21 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           twitchChatEnabled: hasTwitchStreamDestination(resolvedDestinations),
         })
         if (result) {
+          if (isEmbedded && tenantId && isPersistenceEnabled()) {
+            try {
+              const freshConfig = getLocalTenantConfiguration()
+              await registerTwitchChatForGoLive(
+                tenantId,
+                freshConfig?.platform_connections ?? platformConnections,
+                freshConfig?.destinations ?? savedDestinations,
+                registerTwitchChat,
+                sessionId,
+                resolvedDestinations,
+              )
+            } catch (err) {
+              console.warn('[StudioLayout] Twitch chat registration failed:', err)
+            }
+          }
           toast.success(`Live on ${formatStreamDestinationSummary(resolvedDestinations)}`)
         }
       } finally {
@@ -536,12 +586,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       syncStartStreaming,
       refreshOutput,
       tenantId,
+      sessionId,
       platformConnections,
       refreshConfiguration,
       savedDestinations,
       isEmbedded,
       requestFacebookLiveRefresh,
       requestYouTubeLiveRefresh,
+      registerTwitchChat,
     ],
   )
 
@@ -755,6 +807,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           hostPeerId={hostPeerId}
           participants={participants}
           chat={studioChat}
+          socialChatOverlay={context.isHost ? socialChatOverlay : undefined}
         />
       </div>
     </div>

@@ -11,6 +11,7 @@ import type { PersistedDestination, PersistedPlatformConnection } from '@/types/
 import type {
   FacebookLiveRefreshHints,
   YouTubeLiveRefreshHints,
+  TwitchChatRegisterHints,
   PlatformConnectionPayload,
 } from '@/lib/integration/cmsEmbedProtocol'
 import { mapEmbedPayloadToImportRequest } from '@/lib/integration/mapEmbedPlatformImport'
@@ -49,6 +50,18 @@ export function shouldRefreshYouTubeStreamOnGoLive(
   const source = connection.metadata?.source
   return (
     connection.platform === Platform.YOUTUBE &&
+    STREAMABLE_CONNECTION_STATUSES.has(connection.status) &&
+    typeof source === 'string' &&
+    CMS_EMBED_SOURCES.has(source)
+  )
+}
+
+export function shouldRegisterTwitchChatOnGoLive(
+  connection: PersistedPlatformConnection,
+): boolean {
+  const source = connection.metadata?.source
+  return (
+    connection.platform === Platform.TWITCH &&
     STREAMABLE_CONNECTION_STATUSES.has(connection.status) &&
     typeof source === 'string' &&
     CMS_EMBED_SOURCES.has(source)
@@ -121,6 +134,8 @@ export type FacebookLiveRefreshFn = (
 export type YouTubeLiveRefreshFn = (
   hints: YouTubeLiveRefreshHints,
 ) => Promise<PlatformConnectionPayload>
+
+export type TwitchChatRegisterFn = (hints: TwitchChatRegisterHints) => void
 
 function isStreamableConnection(connection: PersistedPlatformConnection): boolean {
   if (!connection.has_stream_key) return false
@@ -254,6 +269,7 @@ export async function refreshFacebookStreamKeys(
   tenantId: string,
   platformConnections: PersistedPlatformConnection[] = [],
   refreshFn: FacebookLiveRefreshFn,
+  studioSessionId?: string,
 ): Promise<void> {
   const facebookConnections = platformConnections.filter(
     (connection) =>
@@ -265,7 +281,10 @@ export async function refreshFacebookStreamKeys(
   for (const connection of facebookConnections) {
     const credentials = await getPlatformEmbedCredentials(tenantId, connection.connection_id)
     const hints = buildFacebookRefreshHints(connection, credentials)
-    const payload = await refreshFn(hints)
+    const payload = await refreshFn({
+      ...hints,
+      studioSessionId: studioSessionId?.trim() || hints.studioSessionId,
+    })
     await importPlatformConnectionFromEmbed(
       tenantId,
       mapEmbedPayloadToImportRequest('facebook', payload),
@@ -277,13 +296,17 @@ export async function refreshYouTubeStreamKeys(
   tenantId: string,
   platformConnections: PersistedPlatformConnection[] = [],
   refreshFn: YouTubeLiveRefreshFn,
+  studioSessionId?: string,
 ): Promise<void> {
   const youtubeConnections = platformConnections.filter(shouldRefreshYouTubeStreamOnGoLive)
 
   for (const connection of youtubeConnections) {
     const credentials = await getPlatformEmbedCredentials(tenantId, connection.connection_id)
     const hints = buildYouTubeRefreshHints(connection, credentials)
-    const payload = await refreshFn(hints)
+    const payload = await refreshFn({
+      ...hints,
+      studioSessionId: studioSessionId?.trim() || hints.studioSessionId,
+    })
     await importPlatformConnectionFromEmbed(
       tenantId,
       mapEmbedPayloadToImportRequest('youtube', payload),
@@ -362,6 +385,92 @@ export function willStreamToYouTube(
   )
   return youtubeDestinations.some((destination) =>
     selectedLabels.has(destination.label.trim() || destination.platform || 'Custom'),
+  )
+}
+
+export function willStreamToTwitch(
+  platformConnections: PersistedPlatformConnection[],
+  savedDestinations: PersistedDestination[],
+  selectedDestinations?: StreamDestinationInput[],
+): boolean {
+  const twitchConnections = platformConnections.filter(shouldRegisterTwitchChatOnGoLive)
+  if (twitchConnections.length === 0) return false
+
+  if (!selectedDestinations?.length) {
+    return true
+  }
+
+  const selectedLabels = new Set(
+    selectedDestinations.map((item) => item.label?.trim() || 'Custom'),
+  )
+
+  if (
+    twitchConnections.some((connection) =>
+      selectedLabels.has(connection.name.trim() || 'Twitch'),
+    )
+  ) {
+    return true
+  }
+
+  const twitchDestinations = savedDestinations.filter(
+    (destination) => destination.platform === Platform.TWITCH,
+  )
+  return twitchDestinations.some((destination) =>
+    selectedLabels.has(destination.label.trim() || destination.platform || 'Custom'),
+  )
+}
+
+function buildTwitchRegisterHints(
+  connection: PersistedPlatformConnection,
+  credentials: PlatformEmbedCredentials,
+  studioSessionId?: string,
+): TwitchChatRegisterHints {
+  const channelLogin =
+    credentials.platform_login?.trim() || connection.platform_login?.trim() || connection.name.trim()
+
+  return {
+    channelLogin,
+    accessToken: credentials.access_token,
+    nick: channelLogin,
+    broadcasterUserId: credentials.platform_user_id || connection.platform_user_id,
+    accountName: credentials.name || connection.name,
+    studioSessionId,
+  }
+}
+
+export async function registerTwitchChatForGoLive(
+  tenantId: string,
+  platformConnections: PersistedPlatformConnection[],
+  savedDestinations: PersistedDestination[],
+  registerFn: TwitchChatRegisterFn,
+  studioSessionId?: string,
+  selectedDestinations?: StreamDestinationInput[],
+): Promise<void> {
+  if (!willStreamToTwitch(platformConnections, savedDestinations, selectedDestinations)) {
+    return
+  }
+
+  const twitchConnections = platformConnections.filter(shouldRegisterTwitchChatOnGoLive)
+  const selectedLabels = selectedDestinations?.length
+    ? new Set(selectedDestinations.map((item) => item.label?.trim() || 'Custom'))
+    : null
+
+  const targetConnections = twitchConnections.filter((connection) => {
+    if (!selectedLabels) return true
+    if (selectedLabels.has(connection.name.trim() || 'Twitch')) return true
+    if (!connection.destination_id) return false
+    const destination = savedDestinations.find(
+      (item) => item.destination_id === connection.destination_id,
+    )
+    if (!destination) return false
+    return selectedLabels.has(destination.label.trim() || destination.platform || 'Custom')
+  })
+
+  await Promise.all(
+    targetConnections.map(async (connection) => {
+      const credentials = await getPlatformEmbedCredentials(tenantId, connection.connection_id)
+      registerFn(buildTwitchRegisterHints(connection, credentials, studioSessionId))
+    }),
   )
 }
 
