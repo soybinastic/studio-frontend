@@ -42,7 +42,7 @@ function trackToPreset(track: TenantMusicTrack): BackgroundMusicPreset {
     uuid: track.track_id,
     title: track.title,
     source: track.source,
-    default: false,
+    default: track.is_system_default,
     size: track.size,
     meta_data: track.meta_data,
   }
@@ -65,9 +65,22 @@ export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMus
   } = store
 
   const tenant = useTenantOptional()
+  const catalog = tenant?.configuration?.music_catalog ?? []
+
+  const studioTracks = useMemo(
+    () =>
+      catalog
+        .filter((t) => t.is_active && t.is_system_default)
+        .map(trackToPreset),
+    [catalog],
+  )
+
   const customTracks = useMemo(
-    () => (tenant?.configuration?.music_catalog ?? []).filter((t) => t.is_active).map(trackToPreset),
-    [tenant?.configuration?.music_catalog],
+    () =>
+      catalog
+        .filter((t) => t.is_active && !t.is_system_default)
+        .map(trackToPreset),
+    [catalog],
   )
 
   const isPlaying = runtime.playback_state === 'playing' || runtime.playback_state === 'buffering'
@@ -168,6 +181,7 @@ export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMus
             <BackgroundMusicPicker
               selectedAssetId={config.track?.asset_id}
               disabled={controlsDisabled}
+              studioTracks={studioTracks}
               customTracks={customTracks}
               onSelect={handleSelect}
             />
