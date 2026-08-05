@@ -5,16 +5,26 @@ import { Button } from '@/components/ui/button'
 import { canUploadCmsAssets } from '@/lib/cmsAuth'
 import { cn } from '@/lib/utils'
 
-interface UploadButtonProps {
+interface AssetUploadControlProps {
+  accept: string
   disabled?: boolean
+  label?: string
+  title?: string
   className?: string
-  onUpload?: (file: File) => Promise<void>
+  onUpload: (file: File) => Promise<void>
 }
 
-export function UploadButton({ disabled, className, onUpload }: UploadButtonProps) {
+export function AssetUploadControl({
+  accept,
+  disabled,
+  label = 'Upload',
+  title,
+  className,
+  onUpload,
+}: AssetUploadControlProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const canUpload = canUploadCmsAssets() && Boolean(onUpload)
+  const canUpload = canUploadCmsAssets()
   const isDisabled = disabled || uploading || !canUpload
 
   const handlePick = () => {
@@ -25,7 +35,7 @@ export function UploadButton({ disabled, className, onUpload }: UploadButtonProp
   const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || !onUpload) return
+    if (!file) return
 
     setUploading(true)
     try {
@@ -43,7 +53,7 @@ export function UploadButton({ disabled, className, onUpload }: UploadButtonProp
       <input
         ref={inputRef}
         type="file"
-        accept=".mp3,.wav,.aac,.flac,.ogg,.m4a,.opus,audio/*"
+        accept={accept}
         className="hidden"
         onChange={(event) => void handleChange(event)}
       />
@@ -54,11 +64,10 @@ export function UploadButton({ disabled, className, onUpload }: UploadButtonProp
         disabled={isDisabled}
         className={cn(className)}
         title={
-          canUpload
-            ? 'Upload a custom music track'
-            : onUpload
-              ? 'CMS authentication required to upload (open studio from CMS)'
-              : 'Upload coming soon — select a preset track for now'
+          title ??
+          (canUpload
+            ? 'Upload a custom asset'
+            : 'CMS authentication required to upload (open studio from CMS)')
         }
         onClick={handlePick}
       >
@@ -67,7 +76,7 @@ export function UploadButton({ disabled, className, onUpload }: UploadButtonProp
         ) : (
           <Upload className="h-3.5 w-3.5" />
         )}
-        {uploading ? 'Uploading…' : 'Upload'}
+        {uploading ? 'Uploading…' : label}
       </Button>
     </>
   )

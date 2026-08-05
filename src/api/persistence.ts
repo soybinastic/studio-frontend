@@ -13,8 +13,12 @@ import type {
   BannerMaterial,
   PersistedDestination,
   PersistedScene,
+  StudioAssetType,
+  StudioMediaAsset,
+  StudioMediaFormat,
   TenantBootstrapResponse,
   TenantConfiguration,
+  TenantMusicTrack,
   TextMaterialCatalog,
   TickerMaterial,
 } from '@/types/persistence'
@@ -113,6 +117,45 @@ export function deletePersistedDestination(tenantId: string, destinationId: stri
 
 export function getTenantAssetCatalog(tenantId: string) {
   return persistenceRequest<AssetCatalog>(`/tenant/${tenantId}/assets/`)
+}
+
+export function createTenantMediaAsset(
+  tenantId: string,
+  body: {
+    asset_type: StudioAssetType
+    source: string
+    thumbnail?: string | null
+    size?: number
+    media_format?: StudioMediaFormat
+    label?: string
+    meta_data?: Record<string, unknown>
+    sort_order?: number
+  },
+) {
+  return persistenceRequest<StudioMediaAsset>(`/tenant/${tenantId}/assets/`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function getTenantMusicCatalog(tenantId: string) {
+  return persistenceRequest<TenantMusicTrack[]>(`/tenant/${tenantId}/music/`)
+}
+
+export function createTenantMusicTrack(
+  tenantId: string,
+  body: {
+    title: string
+    source: string
+    size?: number
+    meta_data?: Record<string, unknown>
+    sort_order?: number
+  },
+) {
+  return persistenceRequest<TenantMusicTrack>(`/tenant/${tenantId}/music/`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export function getTenantTextMaterialCatalog(tenantId: string) {

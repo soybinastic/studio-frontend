@@ -21,6 +21,7 @@ interface BackgroundSectionProps {
   onSelect: (url: string) => void
   onClear: () => void
   onFitChange: (fit: 'cover' | 'stretch') => void
+  onUpload?: (file: File) => Promise<void>
 }
 
 export function BackgroundSection({
@@ -31,6 +32,7 @@ export function BackgroundSection({
   onSelect,
   onClear,
   onFitChange,
+  onUpload,
 }: BackgroundSectionProps) {
   const isActive = Boolean(background?.is_active && resolveGraphicUrl(background))
   const backgroundSupported = layoutSupportsBackground(layout)
@@ -54,6 +56,7 @@ export function BackgroundSection({
         disabled={disabled}
         onSelect={onSelect}
         onClear={onClear}
+        onUpload={onUpload}
       />
 
       {isActive && (

@@ -19,6 +19,7 @@ export interface TenantConfiguration {
   platform_connections?: PersistedPlatformConnection[]
   asset_catalog: AssetCatalog
   text_material_catalog: TextMaterialCatalog
+  music_catalog?: TenantMusicTrack[]
 }
 
 /** Legacy CMS asset type codes from studio-persistence. */
@@ -35,6 +36,20 @@ export interface StudioMediaAsset {
   size: number
   media_format: StudioMediaFormat
   label: string
+  is_system_default: boolean
+  is_active: boolean
+  meta_data: Record<string, unknown>
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface TenantMusicTrack {
+  track_id: string
+  tenant_id: string | null
+  title: string
+  source: string
+  size: number
   is_system_default: boolean
   is_active: boolean
   meta_data: Record<string, unknown>

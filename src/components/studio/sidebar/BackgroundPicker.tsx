@@ -1,4 +1,5 @@
 import { Check, Film } from 'lucide-react'
+import { AssetUploadControl } from '@/components/studio/sidebar/AssetUploadControl'
 import { BACKGROUND_PRESETS, type BackgroundPreset } from '@/lib/backgroundPresets'
 import { cn } from '@/lib/utils'
 
@@ -8,6 +9,7 @@ interface BackgroundPickerProps {
   disabled?: boolean
   onSelect: (url: string) => void
   onClear?: () => void
+  onUpload?: (file: File) => Promise<void>
 }
 
 export function BackgroundPicker({
@@ -16,9 +18,19 @@ export function BackgroundPicker({
   disabled,
   onSelect,
   onClear,
+  onUpload,
 }: BackgroundPickerProps) {
   return (
     <div className="space-y-2">
+      {onUpload ? (
+        <AssetUploadControl
+          accept="image/*,video/*"
+          disabled={disabled}
+          label="Upload background"
+          onUpload={onUpload}
+        />
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
         {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url

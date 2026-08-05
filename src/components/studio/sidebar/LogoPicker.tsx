@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { AssetUploadControl } from '@/components/studio/sidebar/AssetUploadControl'
 import { LOGO_PRESETS, type LogoPreset } from '@/lib/logoPresets'
 import { cn } from '@/lib/utils'
 
@@ -8,6 +9,7 @@ interface LogoPickerProps {
   disabled?: boolean
   onSelect: (url: string) => void
   onClear?: () => void
+  onUpload?: (file: File) => Promise<void>
 }
 
 export function LogoPicker({
@@ -16,9 +18,19 @@ export function LogoPicker({
   disabled,
   onSelect,
   onClear,
+  onUpload,
 }: LogoPickerProps) {
   return (
     <div className="space-y-2">
+      {onUpload ? (
+        <AssetUploadControl
+          accept="image/*"
+          disabled={disabled}
+          label="Upload logo"
+          onUpload={onUpload}
+        />
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
         {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url
