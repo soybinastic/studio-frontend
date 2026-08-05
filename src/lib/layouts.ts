@@ -1,5 +1,7 @@
 import type { LayoutType } from '@/types/session'
 
+export type PreviewVideoFit = 'contain' | 'cover'
+
 export interface LayoutMeta {
   type: LayoutType
   label: string
@@ -8,12 +10,30 @@ export interface LayoutMeta {
   previewClass: string
 }
 
+/** Matches compositor ScaleMode: CONTAIN/COVER fill tiles; other layouts letterbox. */
+export function getPreviewVideoFit(layout: LayoutType): PreviewVideoFit {
+  return layout === 'CONTAIN' || layout === 'COVER' ? 'cover' : 'contain'
+}
+
+/** CONTAIN layout — dynamic grid (ceil(sqrt(n)) columns). */
+export function getContainGridDimensions(count: number): { columns: number; rows: number } {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(count)))
+  const rows = Math.max(1, Math.ceil(count / columns))
+  return { columns, rows }
+}
+
+/** GRID layout — fixed 2×2 (≤4 sources) or 3×3 (≤9 sources). */
+export function getFixedGridDimensions(count: number): { columns: number; rows: number } {
+  if (count <= 4) return { columns: 2, rows: 2 }
+  return { columns: 3, rows: 3 }
+}
+
 /**
  * Layout metadata for UI display and preview hints.
  * Actual positioning/scaling/cropping is handled by the compositor backend.
  */
 export const LAYOUTS: LayoutMeta[] = [
-  { type: 'CONTAIN', label: 'Contain', description: 'Dynamic grid, fit participants', previewClass: 'preview-contain' },
+  { type: 'CONTAIN', label: 'Contain', description: 'Dynamic grid with background', previewClass: 'preview-contain' },
   { type: 'COVER', label: 'Cover', description: 'Grid with fill tiles', previewClass: 'preview-cover' },
   { type: 'THUMBNAIL', label: 'Thumbnail', description: 'Host main + bottom strip', previewClass: 'preview-thumbnail' },
   { type: 'GRID', label: 'Grid', description: 'Fixed 2×2 / 3×3 grid', previewClass: 'preview-grid' },

@@ -1,14 +1,22 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { User } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { PreviewVideoFit } from '@/lib/layouts'
 import type { StudioParticipant } from '@/types/participants'
 
 interface PreviewParticipantProps {
   participant: StudioParticipant
   className?: string
+  videoFit?: PreviewVideoFit
+  style?: CSSProperties
 }
 
-export function PreviewParticipant({ participant, className }: PreviewParticipantProps) {
+export function PreviewParticipant({
+  participant,
+  className,
+  videoFit = 'contain',
+  style,
+}: PreviewParticipantProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -41,9 +49,16 @@ export function PreviewParticipant({ participant, className }: PreviewParticipan
         participant.isSpeaking && 'ring-2 ring-primary',
         className,
       )}
+      style={style}
     >
       {participant.videoTrack && participant.videoEnabled ? (
-        <video ref={videoRef} autoPlay playsInline muted={participant.isLocal} className="h-full w-full object-cover" />
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={participant.isLocal}
+          className={cn('h-full w-full', videoFit === 'cover' ? 'object-cover' : 'object-contain')}
+        />
       ) : (
         <div className="flex h-full items-center justify-center bg-zinc-800">
           <div className="flex flex-col items-center gap-1">

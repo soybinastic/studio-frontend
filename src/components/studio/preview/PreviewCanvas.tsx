@@ -1,4 +1,9 @@
-import { getLayoutMeta } from '@/lib/layouts'
+import {
+  getContainGridDimensions,
+  getFixedGridDimensions,
+  getLayoutMeta,
+  getPreviewVideoFit,
+} from '@/lib/layouts'
 import { backgroundShouldShow } from '@/lib/graphics'
 import { PreviewParticipant } from '@/components/studio/preview/PreviewParticipant'
 import { PreviewGraphicsLayer } from '@/components/studio/preview/PreviewGraphicsLayer'
@@ -41,6 +46,9 @@ export function PreviewCanvas({
   const showBackground = backgroundShouldShow(graphics?.background ?? null, layout)
   // Inset camera tiles when background is active so margins show it (matches compositor BACKGROUND_TILE_INSET).
   const participantInset = showBackground
+  const videoFit = getPreviewVideoFit(layout)
+  const containGrid = getContainGridDimensions(Math.max(tiles.length, 1))
+  const fixedGrid = getFixedGridDimensions(Math.max(tiles.length, 1))
 
   return (
     <div className="relative mx-auto w-full max-w-4xl px-0 sm:px-2">
@@ -55,13 +63,50 @@ export function PreviewCanvas({
           )}
         >
           {layout === 'FULLSCREEN' && primary && (
-            <PreviewParticipant participant={primary} className="h-full w-full" />
+            <PreviewParticipant participant={primary} className="h-full w-full" videoFit={videoFit} />
           )}
 
-          {(layout === 'CONTAIN' || layout === 'COVER' || layout === 'GRID') && (
-            <div className="grid h-full w-full grid-cols-2 gap-0.5 p-0.5">
+          {(layout === 'CONTAIN' || layout === 'COVER') && (
+            <div
+              className={cn(
+                'grid h-full w-full',
+                participantInset && layout === 'CONTAIN' ? 'gap-[1.25%]' : 'gap-0.5 p-0.5',
+              )}
+              style={{
+                gridTemplateColumns: `repeat(${containGrid.columns}, minmax(0, 1fr))`,
+                gridTemplateRows: `repeat(${containGrid.rows}, minmax(0, 1fr))`,
+              }}
+            >
               {tiles.map((p) => (
-                <PreviewParticipant key={p.peerId} participant={p} className="min-h-0" />
+                <PreviewParticipant
+                  key={p.peerId}
+                  participant={p}
+                  className="min-h-0"
+                  videoFit={videoFit}
+                />
+              ))}
+            </div>
+          )}
+
+          {layout === 'GRID' && (
+            <div
+              className="grid h-full w-full gap-0.5 p-0.5"
+              style={{
+                gridTemplateColumns: `repeat(${fixedGrid.columns}, minmax(0, 1fr))`,
+                gridTemplateRows: `repeat(${fixedGrid.rows}, minmax(0, 1fr))`,
+              }}
+            >
+              {tiles.map((p, index) => (
+                <PreviewParticipant
+                  key={p.peerId}
+                  participant={p}
+                  className="min-h-0"
+                  videoFit={videoFit}
+                  style={{
+                    gridColumn: (index % fixedGrid.columns) + 1,
+                    gridRow: Math.floor(index / fixedGrid.columns) + 1,
+                  }}
+                />
               ))}
             </div>
           )}
@@ -69,31 +114,37 @@ export function PreviewCanvas({
           {(layout === 'SIDE_BY_SIDE' || layout === 'HALFSCREEN') && (
             <div className="flex h-full w-full gap-0.5 p-0.5">
               {tiles.slice(0, 2).map((p) => (
-                <PreviewParticipant key={p.peerId} participant={p} className="flex-1" />
+                <PreviewParticipant key={p.peerId} participant={p} className="flex-1" videoFit={videoFit} />
               ))}
             </div>
           )}
 
           {layout === 'SPOTLIGHT' && (
-            <div className="flex h-full w-full gap-0.5 p-0.5">
-              {primary && <PreviewParticipant participant={primary} className="flex-[3]" />}
-              {others.length > 0 && (
-                <div className="flex flex-[1] flex-col gap-0.5">
-                  {others.slice(0, 3).map((p) => (
-                    <PreviewParticipant key={p.peerId} participant={p} className="flex-1" />
-                  ))}
-                </div>
-              )}
-            </div>
+            others.length === 0 && primary ? (
+              <PreviewParticipant participant={primary} className="h-full w-full" videoFit={videoFit} />
+            ) : (
+              <div className="flex h-full w-full gap-0.5 p-0.5">
+                {primary && (
+                  <PreviewParticipant participant={primary} className="w-[70%] shrink-0" videoFit={videoFit} />
+                )}
+                {others.length > 0 && (
+                  <div className="flex w-[30%] shrink-0 flex-col gap-0.5">
+                    {others.slice(0, 3).map((p) => (
+                      <PreviewParticipant key={p.peerId} participant={p} className="flex-1" videoFit={videoFit} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           {layout === 'THUMBNAIL' && (
             <div className="flex h-full w-full flex-col gap-0.5 p-0.5">
-              {primary && <PreviewParticipant participant={primary} className="flex-[3]" />}
+              {primary && <PreviewParticipant participant={primary} className="flex-[3]" videoFit={videoFit} />}
               {others.length > 0 && (
                 <div className="flex flex-[1] gap-0.5">
                   {others.slice(0, 4).map((p) => (
-                    <PreviewParticipant key={p.peerId} participant={p} className="flex-1" />
+                    <PreviewParticipant key={p.peerId} participant={p} className="flex-1" videoFit={videoFit} />
                   ))}
                 </div>
               )}
@@ -102,11 +153,16 @@ export function PreviewCanvas({
 
           {layout === 'CINEMA' && (
             <div className="flex h-full w-full flex-col gap-0.5 p-0.5">
-              {primary && <PreviewParticipant participant={primary} className="flex-[4]" />}
+              {primary && <PreviewParticipant participant={primary} className="flex-[4]" videoFit={videoFit} />}
               {others.length > 0 && (
-                <div className="flex flex-[1] gap-0.5 overflow-x-auto">
+                <div className="flex flex-1 gap-0.5 overflow-x-auto">
                   {others.map((p) => (
-                    <PreviewParticipant key={p.peerId} participant={p} className="min-w-[30%] flex-1" />
+                    <PreviewParticipant
+                      key={p.peerId}
+                      participant={p}
+                      className="min-w-[30%] flex-1"
+                      videoFit={videoFit}
+                    />
                   ))}
                 </div>
               )}
@@ -115,11 +171,14 @@ export function PreviewCanvas({
 
           {(layout === 'PICTURE_IN_PICTURE' || layout === 'OVERLAY') && (
             <div className="relative h-full w-full">
-              {primary && <PreviewParticipant participant={primary} className="h-full w-full" />}
+              {primary && (
+                <PreviewParticipant participant={primary} className="h-full w-full" videoFit={videoFit} />
+              )}
               {others.length > 0 && (
                 <PreviewParticipant
                   participant={others[0]}
                   className="absolute bottom-3 right-3 h-[25%] w-[35%] rounded-lg shadow-lg ring-2 ring-white/20"
+                  videoFit={videoFit}
                 />
               )}
             </div>
