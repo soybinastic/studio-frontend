@@ -1,18 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Disc3 } from 'lucide-react'
-import {
-  BACKGROUND_MUSIC_PRESETS,
-  DEFAULT_BACKGROUND_MUSIC_PRESETS,
-  type BackgroundMusicPreset,
-} from '@/lib/backgroundMusicPresets'
+import type { BackgroundMusicPreset } from '@/lib/backgroundMusicPresets'
 import { cn } from '@/lib/utils'
 
 interface BackgroundMusicPickerProps {
   selectedAssetId?: string | null
   disabled?: boolean
+  studioTracks?: BackgroundMusicPreset[]
   customTracks?: BackgroundMusicPreset[]
   onSelect: (preset: BackgroundMusicPreset) => void
 }
+
+const STUDIO_TRACKS_VISIBLE = 6
 
 function PresetRow({
   preset,
@@ -59,14 +58,13 @@ function PresetRow({
 export function BackgroundMusicPicker({
   selectedAssetId,
   disabled,
+  studioTracks = [],
   customTracks = [],
   onSelect,
 }: BackgroundMusicPickerProps) {
   const [showMore, setShowMore] = useState(false)
-  const extraPresets = useMemo(
-    () => BACKGROUND_MUSIC_PRESETS.filter((preset) => !preset.default),
-    [],
-  )
+  const visibleStudioTracks = studioTracks.slice(0, STUDIO_TRACKS_VISIBLE)
+  const extraStudioTracks = studioTracks.slice(STUDIO_TRACKS_VISIBLE)
 
   return (
     <div className="space-y-2">
@@ -92,19 +90,25 @@ export function BackgroundMusicPicker({
       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         Studio tracks
       </p>
-      <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
-        {DEFAULT_BACKGROUND_MUSIC_PRESETS.map((preset) => (
-          <PresetRow
-            key={preset.uuid}
-            preset={preset}
-            isSelected={selectedAssetId === preset.uuid}
-            disabled={disabled}
-            onSelect={onSelect}
-          />
-        ))}
-      </div>
+      {studioTracks.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground">
+          No studio tracks available yet. Seed defaults or upload a custom track.
+        </p>
+      ) : (
+        <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+          {visibleStudioTracks.map((preset) => (
+            <PresetRow
+              key={preset.uuid}
+              preset={preset}
+              isSelected={selectedAssetId === preset.uuid}
+              disabled={disabled}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
 
-      {extraPresets.length > 0 ? (
+      {extraStudioTracks.length > 0 ? (
         <div className="space-y-2">
           <button
             type="button"
@@ -119,7 +123,7 @@ export function BackgroundMusicPicker({
               </>
             ) : (
               <>
-                Show more tracks ({extraPresets.length})
+                Show more tracks ({extraStudioTracks.length})
                 <ChevronDown className="h-3 w-3" />
               </>
             )}
@@ -127,7 +131,7 @@ export function BackgroundMusicPicker({
 
           {showMore ? (
             <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
-              {extraPresets.map((preset) => (
+              {extraStudioTracks.map((preset) => (
                 <PresetRow
                   key={preset.uuid}
                   preset={preset}
