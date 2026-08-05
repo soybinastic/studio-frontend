@@ -1,4 +1,6 @@
+import { useCallback, useMemo } from 'react'
 import { Music2, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { BackgroundMusicPicker } from '@/components/studio/audio/BackgroundMusicPicker'
@@ -8,9 +10,12 @@ import { VolumeReadout } from '@/components/studio/audio/VolumeSlider'
 import { TrackInformation } from '@/components/studio/audio/TrackInformation'
 import { PlaybackStatus } from '@/components/studio/audio/PlaybackStatus'
 import { UploadButton } from '@/components/studio/audio/UploadButton'
+import { useTenantOptional } from '@/context/TenantProvider'
 import type { BackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import type { BackgroundMusicPreset } from '@/lib/backgroundMusicPresets'
+import { uploadAndRegisterMusic } from '@/lib/uploadStudioAsset'
 import { cn } from '@/lib/utils'
+import type { TenantMusicTrack } from '@/types/persistence'
 
 interface BackgroundMusicPanelProps {
   isHost: boolean
@@ -32,6 +37,17 @@ interface BackgroundMusicPanelProps {
   className?: string
 }
 
+function trackToPreset(track: TenantMusicTrack): BackgroundMusicPreset {
+  return {
+    uuid: track.track_id,
+    title: track.title,
+    source: track.source,
+    default: false,
+    size: track.size,
+    meta_data: track.meta_data,
+  }
+}
+
 export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMusicPanelProps) {
   const {
     config,
@@ -48,6 +64,12 @@ export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMus
     setMuted,
   } = store
 
+  const tenant = useTenantOptional()
+  const customTracks = useMemo(
+    () => (tenant?.configuration?.music_catalog ?? []).filter((t) => t.is_active).map(trackToPreset),
+    [tenant?.configuration?.music_catalog],
+  )
+
   const isPlaying = runtime.playback_state === 'playing' || runtime.playback_state === 'buffering'
   const hasTrack = Boolean(config.track)
   const controlsDisabled = isMutating
@@ -55,6 +77,17 @@ export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMus
   const handleSelect = (preset: BackgroundMusicPreset) => {
     void selectPreset(preset)
   }
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      const track = await uploadAndRegisterMusic({ file })
+      await tenant?.refreshConfiguration()
+      const preset = trackToPreset(track)
+      await selectPreset(preset)
+      toast.success('Music uploaded')
+    },
+    [selectPreset, tenant],
+  )
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -117,7 +150,7 @@ export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMus
         {isHost ? (
           <div className="mt-4 space-y-3 border-t border-border/40 pt-3">
             <div className="flex flex-wrap gap-2">
-              <UploadButton />
+              <UploadButton disabled={controlsDisabled} onUpload={handleUpload} />
               {hasTrack ? (
                 <Button
                   type="button"
@@ -135,6 +168,7 @@ export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMus
             <BackgroundMusicPicker
               selectedAssetId={config.track?.asset_id}
               disabled={controlsDisabled}
+              customTracks={customTracks}
               onSelect={handleSelect}
             />
 
@@ -143,7 +177,7 @@ export function BackgroundMusicPanel({ isHost, store, className }: BackgroundMus
                 ? 'Saving track to this scene…'
                 : hasTrack
                   ? 'Preview plays in your browser. Recording and live stream use the server mix.'
-                  : 'Click a preset to start playing. Upload is coming soon.'}
+                  : 'Click a track to start playing, or upload your own.'}
             </p>
           </div>
         ) : null}

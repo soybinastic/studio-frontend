@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { toast } from 'sonner'
 import { BackgroundSection } from '@/components/studio/sidebar/BackgroundSection'
 import { BannerSection } from '@/components/studio/sidebar/BannerSection'
 import { BannerTickerConfigModal } from '@/components/studio/sidebar/BannerTickerConfigModal'
@@ -9,6 +10,7 @@ import { TickerConfigModal } from '@/components/studio/sidebar/TickerConfigModal
 import { TickerSection } from '@/components/studio/sidebar/TickerSection'
 import { ThemeStyleSection } from '@/components/studio/sidebar/ThemeStyleSection'
 import { useAssetCatalog } from '@/hooks/useAssetCatalog'
+import { useTenantOptional } from '@/context/TenantProvider'
 import {
   BANNER_PRESETS,
   TICKER_PRESETS,
@@ -25,6 +27,7 @@ import { resolveGraphicUrl } from '@/lib/graphics'
 import { buildLogoGraphic, getLogoPlacement } from '@/lib/logoPresets'
 import { FULL_FRAME_OVERLAY_POSITION } from '@/lib/overlayPresets'
 import { buildQrGraphic, getQrPlacement } from '@/lib/qrGeometry'
+import { uploadAndRegisterGraphic } from '@/lib/uploadStudioAsset'
 import type { BannerThemeStyle, LogoPlacement, QrPlacement } from '@/types/graphics'
 import type { LayoutType } from '@/types/session'
 import type { GraphicLayerKey, GraphicsState } from '@/types/graphics'
@@ -49,9 +52,24 @@ export function GraphicsPanel({
   isSaving,
 }: GraphicsPanelProps) {
   const readOnly = disabled || !isHost
+  const tenant = useTenantOptional()
   const { backgrounds, overlays, logos, qrCodes } = useAssetCatalog()
   const [bannerModalOpen, setBannerModalOpen] = useState(false)
   const [tickerModalOpen, setTickerModalOpen] = useState(false)
+
+  const refreshCatalog = useCallback(async () => {
+    await tenant?.refreshConfiguration()
+  }, [tenant])
+
+  const handleGraphicUpload = useCallback(
+    async (file: File, type: 1 | 2 | 4, apply: (url: string) => void) => {
+      const asset = await uploadAndRegisterGraphic({ file, type })
+      await refreshCatalog()
+      apply(asset.source)
+      toast.success('Asset uploaded')
+    },
+    [refreshCatalog],
+  )
 
   const handleBackgroundSelect = useCallback(
     (url: string) => {
@@ -222,6 +240,19 @@ export function GraphicsPanel({
             fit,
           })
         }}
+        onUpload={
+          readOnly
+            ? undefined
+            : (file) =>
+                handleGraphicUpload(file, 4, (url) => {
+                  onUpdate('background', {
+                    url,
+                    source: url,
+                    is_active: true,
+                    fit: graphics?.background?.fit ?? 'cover',
+                  })
+                })
+        }
       />
 
       <LogoSection
@@ -231,6 +262,15 @@ export function GraphicsPanel({
         onSelect={handleLogoSelect}
         onPlacementChange={handleLogoPlacementChange}
         onClear={() => onUpdate('logo', null)}
+        onUpload={
+          readOnly
+            ? undefined
+            : (file) =>
+                handleGraphicUpload(file, 1, (url) => {
+                  const placement = getLogoPlacement(graphics?.logo)
+                  onUpdate('logo', { ...buildLogoGraphic(url, placement), source: url })
+                })
+        }
       />
 
       <OverlaySection
@@ -239,6 +279,19 @@ export function GraphicsPanel({
         disabled={readOnly}
         onSelect={handleOverlaySelect}
         onClear={() => onUpdate('overlay', null)}
+        onUpload={
+          readOnly
+            ? undefined
+            : (file) =>
+                handleGraphicUpload(file, 2, (url) => {
+                  onUpdate('overlay', {
+                    url,
+                    source: url,
+                    is_active: true,
+                    position: { ...FULL_FRAME_OVERLAY_POSITION },
+                  })
+                })
+        }
       />
 
       <BannerSection

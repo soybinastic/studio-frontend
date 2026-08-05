@@ -12,6 +12,7 @@ interface LogoSectionProps {
   onSelect: (url: string) => void
   onPlacementChange: (placement: LogoPlacement) => void
   onClear: () => void
+  onUpload?: (file: File) => Promise<void>
 }
 
 export function LogoSection({
@@ -21,6 +22,7 @@ export function LogoSection({
   onSelect,
   onPlacementChange,
   onClear,
+  onUpload,
 }: LogoSectionProps) {
   const isActive = Boolean(logo?.is_active && resolveGraphicUrl(logo))
   const placement = isActive ? getLogoPlacement(logo) : DEFAULT_LOGO_PLACEMENT
@@ -37,6 +39,7 @@ export function LogoSection({
         disabled={disabled}
         onSelect={onSelect}
         onClear={onClear}
+        onUpload={onUpload}
       />
 
       {isActive && (

@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { AssetUploadControl } from '@/components/studio/sidebar/AssetUploadControl'
 import { OVERLAY_PRESETS, type OverlayPreset } from '@/lib/overlayPresets'
 import { cn } from '@/lib/utils'
 
@@ -8,6 +9,7 @@ interface OverlayPickerProps {
   disabled?: boolean
   onSelect: (url: string) => void
   onClear?: () => void
+  onUpload?: (file: File) => Promise<void>
 }
 
 export function OverlayPicker({
@@ -16,9 +18,19 @@ export function OverlayPicker({
   disabled,
   onSelect,
   onClear,
+  onUpload,
 }: OverlayPickerProps) {
   return (
     <div className="space-y-2">
+      {onUpload ? (
+        <AssetUploadControl
+          accept="image/*"
+          disabled={disabled}
+          label="Upload overlay"
+          onUpload={onUpload}
+        />
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
         {presets.map((preset) => {
           const isSelected = selectedUrl === preset.url

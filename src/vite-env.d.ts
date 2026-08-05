@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_COMPOSITOR_API_URL: string
   readonly VITE_PERSISTENCE_API_URL?: string
+  readonly VITE_CMS_API_URL?: string
   readonly VITE_TENANT_ID?: string
   readonly VITE_TENANT_NAME?: string
   readonly VITE_PERSISTENCE_ENABLED?: string

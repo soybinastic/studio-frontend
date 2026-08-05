@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Disc3 } from 'lucide-react'
 import {
   BACKGROUND_MUSIC_PRESETS,
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 interface BackgroundMusicPickerProps {
   selectedAssetId?: string | null
   disabled?: boolean
+  customTracks?: BackgroundMusicPreset[]
   onSelect: (preset: BackgroundMusicPreset) => void
 }
 
@@ -46,7 +47,9 @@ function PresetRow({
         <span className="block truncate text-xs font-medium">{preset.title}</span>
         {preset.default ? (
           <span className="block text-[10px] text-muted-foreground">Studio track</span>
-        ) : null}
+        ) : (
+          <span className="block text-[10px] text-muted-foreground">Custom upload</span>
+        )}
       </span>
       {isSelected ? <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden /> : null}
     </button>
@@ -56,13 +59,36 @@ function PresetRow({
 export function BackgroundMusicPicker({
   selectedAssetId,
   disabled,
+  customTracks = [],
   onSelect,
 }: BackgroundMusicPickerProps) {
   const [showMore, setShowMore] = useState(false)
-  const extraPresets = BACKGROUND_MUSIC_PRESETS.filter((preset) => !preset.default)
+  const extraPresets = useMemo(
+    () => BACKGROUND_MUSIC_PRESETS.filter((preset) => !preset.default),
+    [],
+  )
 
   return (
     <div className="space-y-2">
+      {customTracks.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Your uploads
+          </p>
+          <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+            {customTracks.map((preset) => (
+              <PresetRow
+                key={preset.uuid}
+                preset={preset}
+                isSelected={selectedAssetId === preset.uuid}
+                disabled={disabled}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         Studio tracks
       </p>

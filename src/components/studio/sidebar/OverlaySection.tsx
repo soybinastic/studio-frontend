@@ -10,6 +10,7 @@ interface OverlaySectionProps {
   disabled?: boolean
   onSelect: (url: string) => void
   onClear: () => void
+  onUpload?: (file: File) => Promise<void>
 }
 
 export function OverlaySection({
@@ -18,6 +19,7 @@ export function OverlaySection({
   disabled,
   onSelect,
   onClear,
+  onUpload,
 }: OverlaySectionProps) {
   const isActive = Boolean(overlay?.is_active && resolveGraphicUrl(overlay))
 
@@ -33,6 +35,7 @@ export function OverlaySection({
         disabled={disabled}
         onSelect={onSelect}
         onClear={onClear}
+        onUpload={onUpload}
       />
     </GraphicsCollapsibleSection>
   )
