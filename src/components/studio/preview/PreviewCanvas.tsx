@@ -117,18 +117,22 @@ export function PreviewCanvas({
           )}
 
           {layout === 'SPOTLIGHT' && (
-            <div className="flex h-full w-full gap-0.5 p-0.5">
-              {primary && (
-                <PreviewParticipant participant={primary} className="w-[70%] shrink-0" videoFit={videoFit} />
-              )}
-              {others.length > 0 && (
-                <div className="flex w-[30%] shrink-0 flex-col gap-0.5">
-                  {others.slice(0, 3).map((p) => (
-                    <PreviewParticipant key={p.peerId} participant={p} className="flex-1" videoFit={videoFit} />
-                  ))}
-                </div>
-              )}
-            </div>
+            others.length === 0 && primary ? (
+              <PreviewParticipant participant={primary} className="h-full w-full" videoFit={videoFit} />
+            ) : (
+              <div className="flex h-full w-full gap-0.5 p-0.5">
+                {primary && (
+                  <PreviewParticipant participant={primary} className="w-[70%] shrink-0" videoFit={videoFit} />
+                )}
+                {others.length > 0 && (
+                  <div className="flex w-[30%] shrink-0 flex-col gap-0.5">
+                    {others.slice(0, 3).map((p) => (
+                      <PreviewParticipant key={p.peerId} participant={p} className="flex-1" videoFit={videoFit} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           {layout === 'THUMBNAIL' && (
