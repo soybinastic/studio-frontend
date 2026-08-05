@@ -1,11 +1,31 @@
 import type { LayoutType } from '@/types/session'
 
+export type PreviewVideoFit = 'contain' | 'cover'
+
 export interface LayoutMeta {
   type: LayoutType
   label: string
   description: string
   /** CSS class hint for HTML preview approximation only — NOT compositor positioning */
   previewClass: string
+}
+
+/** Matches compositor ScaleMode: COVER fills tiles; all other layouts letterbox. */
+export function getPreviewVideoFit(layout: LayoutType): PreviewVideoFit {
+  return layout === 'COVER' ? 'cover' : 'contain'
+}
+
+/** CONTAIN layout — dynamic grid (ceil(sqrt(n)) columns). */
+export function getContainGridDimensions(count: number): { columns: number; rows: number } {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(count)))
+  const rows = Math.max(1, Math.ceil(count / columns))
+  return { columns, rows }
+}
+
+/** GRID layout — fixed 2×2 (≤4 sources) or 3×3 (≤9 sources). */
+export function getFixedGridDimensions(count: number): { columns: number; rows: number } {
+  if (count <= 4) return { columns: 2, rows: 2 }
+  return { columns: 3, rows: 3 }
 }
 
 /**
