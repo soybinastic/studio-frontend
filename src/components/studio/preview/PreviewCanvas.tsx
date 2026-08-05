@@ -68,7 +68,10 @@ export function PreviewCanvas({
 
           {(layout === 'CONTAIN' || layout === 'COVER') && (
             <div
-              className="grid h-full w-full gap-0.5 p-0.5"
+              className={cn(
+                'grid h-full w-full',
+                participantInset && layout === 'CONTAIN' ? 'gap-[1.25%]' : 'gap-0.5 p-0.5',
+              )}
               style={{
                 gridTemplateColumns: `repeat(${containGrid.columns}, minmax(0, 1fr))`,
                 gridTemplateRows: `repeat(${containGrid.rows}, minmax(0, 1fr))`,
