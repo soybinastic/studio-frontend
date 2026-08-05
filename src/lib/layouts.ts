@@ -10,9 +10,9 @@ export interface LayoutMeta {
   previewClass: string
 }
 
-/** Matches compositor ScaleMode: COVER fills tiles; all other layouts letterbox. */
+/** Matches compositor ScaleMode: CONTAIN/COVER fill tiles; other layouts letterbox. */
 export function getPreviewVideoFit(layout: LayoutType): PreviewVideoFit {
-  return layout === 'COVER' ? 'cover' : 'contain'
+  return layout === 'CONTAIN' || layout === 'COVER' ? 'cover' : 'contain'
 }
 
 /** CONTAIN layout — dynamic grid (ceil(sqrt(n)) columns). */
@@ -33,7 +33,7 @@ export function getFixedGridDimensions(count: number): { columns: number; rows: 
  * Actual positioning/scaling/cropping is handled by the compositor backend.
  */
 export const LAYOUTS: LayoutMeta[] = [
-  { type: 'CONTAIN', label: 'Contain', description: 'Dynamic grid, fit participants', previewClass: 'preview-contain' },
+  { type: 'CONTAIN', label: 'Contain', description: 'Dynamic grid with background', previewClass: 'preview-contain' },
   { type: 'COVER', label: 'Cover', description: 'Grid with fill tiles', previewClass: 'preview-cover' },
   { type: 'THUMBNAIL', label: 'Thumbnail', description: 'Host main + bottom strip', previewClass: 'preview-thumbnail' },
   { type: 'GRID', label: 'Grid', description: 'Fixed 2×2 / 3×3 grid', previewClass: 'preview-grid' },
