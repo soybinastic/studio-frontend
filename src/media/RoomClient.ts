@@ -189,7 +189,7 @@ export class RoomClient {
 
   async disableMic(): Promise<void> {
     if (!this.micProducer) return
-    this.micProducer.close()
+    this.closeAndNotifyProducer(this.micProducer)
     this.micProducer = null
     this.stopMicStream()
     this.micEnabled = false
@@ -239,7 +239,7 @@ export class RoomClient {
 
   async disableWebcam(): Promise<void> {
     if (!this.webcamProducer) return
-    this.webcamProducer.close()
+    this.closeAndNotifyProducer(this.webcamProducer)
     this.webcamProducer = null
     this.stopWebcamStream()
     this.webcamEnabled = false
@@ -305,21 +305,39 @@ export class RoomClient {
     if (this.closed) return
     this.closed = true
 
-    this.micProducer?.close()
+    if (this.micProducer) {
+      this.closeAndNotifyProducer(this.micProducer)
+      this.micProducer = null
+    }
     this.stopMicStream()
-    this.webcamProducer?.close()
+    if (this.webcamProducer) {
+      this.closeAndNotifyProducer(this.webcamProducer)
+      this.webcamProducer = null
+    }
     this.stopWebcamStream()
     this.sendTransport?.close()
     this.recvTransport?.close()
     this.protoo?.close()
 
-    this.micProducer = null
-    this.webcamProducer = null
     this.sendTransport = null
     this.recvTransport = null
     this.protoo = null
     this.remoteParticipants.clear()
     this.setState('disconnected')
+  }
+
+  /**
+   * Close a local mediasoup producer and notify the SFU so remotes get
+   * consumerClosed and the compositor poll drops the producer.
+   */
+  private closeAndNotifyProducer(producer: MediasoupTypes.Producer): void {
+    const producerId = producer.id
+    producer.close()
+    try {
+      this.protoo?.notify('closeProducer', { producerId })
+    } catch {
+      // Protoo may already be closing (e.g. room leave); peer teardown covers the rest.
+    }
   }
 
   private async resolvePreferences(): Promise<{

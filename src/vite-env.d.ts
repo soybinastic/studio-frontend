@@ -25,6 +25,7 @@ declare module 'protoo-client' {
     on(event: string, listener: (...args: unknown[]) => void): void
     close(): void
     request(method: string, data?: unknown): Promise<unknown>
+    notify(method: string, data?: unknown): Promise<void>
   }
 
   const protooClient: {

@@ -1,5 +1,4 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
-import { User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { PreviewVideoFit } from '@/lib/layouts'
 import type { StudioParticipant } from '@/types/participants'
@@ -19,6 +18,14 @@ export function PreviewParticipant({
 }: PreviewParticipantProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const displayName = participant.displayName.replace(' (You)', '')
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
   useEffect(() => {
     const video = videoRef.current
@@ -61,13 +68,11 @@ export function PreviewParticipant({
         />
       ) : (
         <div className="flex h-full items-center justify-center bg-zinc-800">
-          <div className="flex flex-col items-center gap-1">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-700">
-              <User className="h-5 w-5 text-zinc-400" />
+          <div className="flex max-w-full flex-col items-center gap-1.5 px-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-700">
+              <span className="text-lg font-semibold text-zinc-200">{initials || '?'}</span>
             </div>
-            <span className="max-w-full truncate px-1 text-[10px] text-zinc-400">
-              {participant.displayName}
-            </span>
+            <span className="max-w-full truncate text-[10px] text-zinc-400">{displayName}</span>
           </div>
         </div>
       )}
@@ -75,7 +80,7 @@ export function PreviewParticipant({
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1">
         <span className="truncate text-[10px] font-medium text-white">
           {participant.isHost && '★ '}
-          {participant.displayName.replace(' (You)', '')}
+          {displayName}
         </span>
       </div>
 
