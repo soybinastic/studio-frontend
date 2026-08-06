@@ -28,9 +28,15 @@ function stripQueryParams(names: string[]): void {
 /**
  * Capture CMS JWT + studio UUID from the iframe query string on load.
  * Stores them in sessionStorage and strips `token` from the visible URL.
+ *
+ * Guest invite links also use `?token=` on `/join/:sessionId` — skip those
+ * so the invite token is left for JoinPage.
  */
 export function bootstrapCmsAuthFromLocation(): void {
   if (!canUseSessionStorage()) return
+
+  // Invite URLs: /join/{sessionId}?token={invite_token}
+  if (window.location.pathname.startsWith('/join/')) return
 
   const token = readQueryParam('token')
   const studioUuid = readQueryParam('studio_uuid')
