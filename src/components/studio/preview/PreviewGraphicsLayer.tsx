@@ -66,14 +66,20 @@ export function PreviewGraphicsLayer({ layout, graphics, variant }: PreviewGraph
       )}
 
       {bannerShouldShow(graphics.banner) && graphics.banner && (
-        <PreviewBannerLayer banner={graphics.banner} />
+        <PreviewBannerLayer banner={graphics.banner} fonts={graphics.fonts} />
       )}
 
       {tickerShouldShow(graphics.ticker) && graphics.ticker && (
-        <PreviewTickerLayer ticker={graphics.ticker} chatActive={chatActive} />
+        <PreviewTickerLayer
+          ticker={graphics.ticker}
+          chatActive={chatActive}
+          fonts={graphics.fonts}
+        />
       )}
 
-      {chatActive && graphics.chat && <PreviewChatLayer chat={graphics.chat} />}
+      {chatActive && graphics.chat && (
+        <PreviewChatLayer chat={graphics.chat} fonts={graphics.fonts} />
+      )}
 
       {qrRect && graphics.qr?.url && (
         <img

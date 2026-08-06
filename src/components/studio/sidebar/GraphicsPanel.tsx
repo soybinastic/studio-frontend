@@ -9,6 +9,7 @@ import { QrSection } from '@/components/studio/sidebar/QrSection'
 import { TickerConfigModal } from '@/components/studio/sidebar/TickerConfigModal'
 import { TickerSection } from '@/components/studio/sidebar/TickerSection'
 import { ThemeStyleSection } from '@/components/studio/sidebar/ThemeStyleSection'
+import { SceneFontPicker } from '@/components/studio/sidebar/SceneFontPicker'
 import { useAssetCatalog } from '@/hooks/useAssetCatalog'
 import { useTenantOptional } from '@/context/TenantProvider'
 import {
@@ -202,6 +203,13 @@ export function GraphicsPanel({
     [onUpdate, graphics?.banner],
   )
 
+  const handleFontChange = useCallback(
+    (fontFamily: string) => {
+      onUpdateLayers?.({ fonts: fontFamily })
+    },
+    [onUpdateLayers],
+  )
+
   const handleBannerCreateSave = useCallback(
     (payload: { banner: NonNullable<GraphicsState['banner']>; ticker?: NonNullable<GraphicsState['ticker']> }) => {
       if (payload.ticker && onUpdateLayers) {
@@ -300,6 +308,12 @@ export function GraphicsPanel({
         onSelect={handleBannerSelect}
         onClear={() => onUpdate('banner', null)}
         onCreateCustom={readOnly ? undefined : () => setBannerModalOpen(true)}
+      />
+
+      <SceneFontPicker
+        fonts={graphics?.fonts}
+        disabled={readOnly}
+        onChange={handleFontChange}
       />
 
       <ThemeStyleSection

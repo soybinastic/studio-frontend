@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { BannerGraphic } from '@/types/graphics'
 import { bannerContentWidth, BANNER_CANVAS, BANNER_X } from '@/lib/bannerGeometry'
 import {
@@ -6,13 +7,16 @@ import {
   normalizeBannerTheme,
   resolveBannerBrandColors,
 } from '@/lib/bannerThemes'
+import { cssFontFamily, ensureFontLoaded } from '@/lib/typography/cssAdapter'
+import { resolveDisplayFont } from '@/lib/typography/policy'
 import { cn } from '@/lib/utils'
 
 interface PreviewBannerLayerProps {
   banner: BannerGraphic
+  fonts?: string | null
 }
 
-export function PreviewBannerLayer({ banner }: PreviewBannerLayerProps) {
+export function PreviewBannerLayer({ banner, fonts }: PreviewBannerLayerProps) {
   const hasDescription = Boolean(banner.description?.trim())
   const fontSize = banner.font_size || 32
   const extra = fontSize >= 70 ? 40 : 0
@@ -23,6 +27,11 @@ export function PreviewBannerLayer({ banner }: PreviewBannerLayerProps) {
   const theme = normalizeBannerTheme(banner.theme)
   const colors = resolveBannerBrandColors(banner)
   const shapeClass = bannerShapeClassName(theme)
+  const displayFont = resolveDisplayFont(fonts)
+
+  useEffect(() => {
+    ensureFontLoaded(displayFont)
+  }, [displayFont])
 
   return (
     <div
@@ -31,6 +40,7 @@ export function PreviewBannerLayer({ banner }: PreviewBannerLayerProps) {
         left: `${(BANNER_X / BANNER_CANVAS.w) * 100}%`,
         bottom: `${bottomPct}%`,
         width: `${(bannerContentWidth(banner) / BANNER_CANVAS.w) * 100}%`,
+        fontFamily: cssFontFamily(displayFont),
       }}
     >
       <div

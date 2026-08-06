@@ -90,9 +90,18 @@ export interface GraphicsState {
   banner: BannerGraphic | null
   ticker: TickerGraphic | null
   chat: ChatGraphic | null
+  /** Scene-level font family (applies to banner, ticker, chat text overlays). */
+  fonts?: string | null
 }
 
-export type GraphicLayerKey = keyof GraphicsState
+export type GraphicLayerKey =
+  | 'background'
+  | 'overlay'
+  | 'logo'
+  | 'qr'
+  | 'banner'
+  | 'ticker'
+  | 'chat'
 
 export interface GraphicLayerMeta {
   key: GraphicLayerKey

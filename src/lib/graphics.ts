@@ -73,15 +73,31 @@ export function emptyGraphicsState(): GraphicsState {
     banner: null,
     ticker: null,
     chat: null,
+    fonts: null,
   }
 }
 
 export function mergeGraphicsState(base: GraphicsState | null, patch: Partial<GraphicsState>): GraphicsState {
-  return { ...emptyGraphicsState(), ...base, ...patch }
+  const merged = { ...emptyGraphicsState(), ...base, ...patch }
+  const alias = (patch as { fontFamily?: string | null }).fontFamily
+  if (alias != null && patch.fonts === undefined) {
+    merged.fonts = String(alias)
+  }
+  return merged
 }
+
+const LAYER_KEYS = [
+  'background',
+  'overlay',
+  'logo',
+  'qr',
+  'banner',
+  'ticker',
+  'chat',
+] as const
 
 /** True when at least one graphics layer is explicitly set (not null/undefined). */
 export function hasNonNullGraphicsLayers(state: Partial<GraphicsState> | null | undefined): boolean {
   if (!state) return false
-  return Object.values(state).some((value) => value != null)
+  return LAYER_KEYS.some((key) => state[key] != null) || Boolean(state.fonts)
 }
