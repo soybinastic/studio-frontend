@@ -616,6 +616,15 @@ export class RoomClient {
         appData: { source?: string; sourceId?: string }
       }
 
+      console.log('[newConsumer]', {
+        peerId: data.peerId,
+        kind: data.kind,
+        appData: data.appData,
+        streamId: data.appData?.sourceId
+          ? `${data.peerId}-${data.appData.sourceId}`
+          : `${data.peerId}-av`,
+      })
+
       if (this.shouldExcludePeer(data.peerId)) {
         reject(403, 'Cannot consume system peer')
         return
