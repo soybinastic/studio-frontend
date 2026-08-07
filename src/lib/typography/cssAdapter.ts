@@ -3,7 +3,7 @@ import {
   type StudioFontFamily,
 } from '@/lib/typography/catalog'
 
-/** Families available via Google Fonts CSS API (Graphik is proprietary). */
+/** Families available via Google Fonts CSS API. */
 const GOOGLE_FONT_QUERY: Partial<Record<StudioFontFamily, string>> = {
   Rubik: 'Rubik:wght@400;700',
   'Roboto Slab': 'Roboto+Slab:wght@400;700',
@@ -14,7 +14,6 @@ const GOOGLE_FONT_QUERY: Partial<Record<StudioFontFamily, string>> = {
   'Fira Mono': 'Fira+Mono:wght@400;700',
   'Permanent Marker': 'Permanent+Marker',
   Geologica: 'Geologica:wght@400;700',
-  'Dyna Puff': 'DynaPuff:wght@400;700',
   'Departure Mono': 'Fira+Mono:wght@400;700',
 }
 
@@ -24,9 +23,6 @@ function cssStack(family: StudioFontFamily): string {
   if (family === 'Arial') return 'Arial, Helvetica, sans-serif'
   if (family === 'Fira Mono' || family === 'Departure Mono') {
     return `"${family === 'Departure Mono' ? 'Fira Mono' : family}", ui-monospace, monospace`
-  }
-  if (family === 'Graphik') {
-    return '"Graphik", "Helvetica Neue", Helvetica, Arial, sans-serif'
   }
   return `"${family}", sans-serif`
 }
@@ -38,7 +34,7 @@ export function cssFontFamily(family: string | null | undefined): string {
   return cssStack(canonical)
 }
 
-/** Ensure a Google Font stylesheet is present for preview (no-op for Arial/Graphik). */
+/** Ensure a Google Font stylesheet is present for preview (no-op for Arial). */
 export function ensureFontLoaded(family: string | null | undefined): void {
   if (typeof document === 'undefined') return
   const canonical = canonicalizeFontFamily(family)

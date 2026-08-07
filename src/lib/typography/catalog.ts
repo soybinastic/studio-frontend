@@ -14,8 +14,6 @@ export const STUDIO_FONT_FAMILIES = [
   'Fira Mono',
   'Permanent Marker',
   'Geologica',
-  'Graphik',
-  'Dyna Puff',
   'Departure Mono',
 ] as const
 
