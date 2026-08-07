@@ -272,27 +272,30 @@ export class RoomClient {
     }
   }
 
+  /**
+   * Apply scene/settings device prefs.
+   *
+   * Hybrid:
+   * - Media currently on → replaceTrack (same producer id; no compositor soft-disable)
+   * - Media currently off → prefs only (next enableMic/enableWebcam uses new device)
+   * Toolbar cam/mic off still uses hard-close → compositor placeholder path.
+   */
   async replaceDevices(selection: DeviceSelection): Promise<DeviceSelection> {
     const devices = await enumerateMediaDevices()
     const resolved = resolveSelectionDevices(devices, selection)
     this.setDevicePreferences(resolved)
 
-    const wasMic = this.micEnabled
-    const wasWebcam = this.webcamEnabled
-
-    if (this.micProducer) await this.disableMic()
-    if (this.webcamProducer) await this.disableWebcam()
-
-    if (wasMic) {
+    if (this.micProducer && this.micEnabled) {
       try {
-        await this.enableMic()
+        await this.replaceMicTrack(devices, resolved)
       } catch (err) {
         this.reportError(err, 'Could not switch microphone.')
       }
     }
-    if (wasWebcam) {
+
+    if (this.webcamProducer && this.webcamEnabled) {
       try {
-        await this.enableWebcam()
+        await this.replaceWebcamTrack(devices, resolved)
       } catch (err) {
         this.reportError(err, 'Could not switch camera.')
       }
@@ -640,6 +643,108 @@ export class RoomClient {
 
   private setState(state: ConnectionState): void {
     this.options.onStateChange?.(state)
+  }
+
+  private currentTrackDeviceId(track: MediaStreamTrack | null | undefined): string | undefined {
+    return track?.getSettings().deviceId
+  }
+
+  /**
+   * Hot-swap microphone device without closing the mediasoup producer.
+   * No-op when the resolved device matches the track already in use.
+   */
+  private async replaceMicTrack(
+    devices: Awaited<ReturnType<typeof enumerateMediaDevices>>,
+    selection: DeviceSelection,
+  ): Promise<void> {
+    if (!this.micProducer || this.micProducer.closed) return
+
+    const microphone = resolveMediaDevice(
+      devices,
+      {
+        deviceId: selection.microphoneId,
+        label: selection.microphoneLabel,
+      },
+      'audioinput',
+    )
+    if (!microphone) {
+      throw new Error(deviceUnavailableMessage(selection, 'microphone'))
+    }
+
+    const currentId = this.currentTrackDeviceId(this.micProducer.track)
+    if (currentId && currentId === microphone.deviceId) {
+      return
+    }
+
+    const stream = await openAudioStream(microphone.deviceId, 'producer', {
+      label: microphone.label,
+    })
+    const track = stream.getAudioTracks()[0]
+    if (!track) {
+      stopMediaStream(stream)
+      throw new Error('No audio track was returned.')
+    }
+
+    const previousStream = this.micStream
+    try {
+      await this.micProducer.replaceTrack({ track })
+    } catch (err) {
+      stopMediaStream(stream)
+      throw err
+    }
+
+    this.micStream = stream
+    stopMediaStream(previousStream)
+    this.emitParticipants()
+  }
+
+  /**
+   * Hot-swap camera device without closing the mediasoup producer.
+   * Keeps producerId stable so compositor does not soft-disable during scene switches.
+   */
+  private async replaceWebcamTrack(
+    devices: Awaited<ReturnType<typeof enumerateMediaDevices>>,
+    selection: DeviceSelection,
+  ): Promise<void> {
+    if (!this.webcamProducer || this.webcamProducer.closed) return
+
+    const camera = resolveMediaDevice(
+      devices,
+      {
+        deviceId: selection.cameraId,
+        label: selection.cameraLabel,
+      },
+      'videoinput',
+    )
+    if (!camera) {
+      throw new Error(deviceUnavailableMessage(selection, 'camera'))
+    }
+
+    const currentId = this.currentTrackDeviceId(this.webcamProducer.track)
+    if (currentId && currentId === camera.deviceId) {
+      return
+    }
+
+    const stream = await openVideoStream(camera.deviceId, 'producer', {
+      label: camera.label,
+    })
+    const track = stream.getVideoTracks()[0]
+    if (!track) {
+      stopMediaStream(stream)
+      throw new Error('No video track was returned.')
+    }
+
+    const previousStream = this.webcamStream
+    try {
+      await this.webcamProducer.replaceTrack({ track })
+    } catch (err) {
+      stopMediaStream(stream)
+      throw err
+    }
+
+    this.webcamStream = stream
+    stopMediaStream(previousStream)
+    this.emitParticipants()
   }
 
   private stopMicStream(): void {
