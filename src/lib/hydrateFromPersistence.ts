@@ -10,9 +10,35 @@ import {
   linkSceneIds,
   markSessionHydrated,
 } from '@/lib/sceneIdMap'
+import {
+  getCatalogFromSceneSources,
+} from '@/lib/sourceCatalog'
+import { assignmentsFromSceneItems, getSceneItems } from '@/types/sources'
 import type { TenantConfiguration } from '@/types/persistence'
 import type { LayoutType } from '@/types/session'
+import type { SceneSourcesConfig } from '@/types/sources'
 import type { UpdateSceneRequest } from '@/types/scenes'
+
+/** Drop ghost SceneItems that lack a persisted Source catalog snapshot. */
+function prepareSourcesForHydrate(
+  config: SceneSourcesConfig | undefined,
+): SceneSourcesConfig {
+  if (!config) {
+    return { version: 2, items: [], sources: [], assignments: {} }
+  }
+  const catalog = getCatalogFromSceneSources(config)
+  if (catalog.length === 0) {
+    return { version: 2, items: [], sources: [], assignments: {} }
+  }
+  const catalogIds = new Set(catalog.map((row) => row.sourceId))
+  const items = getSceneItems(config).filter((item) => catalogIds.has(item.sourceId))
+  return {
+    version: 2,
+    items,
+    sources: catalog,
+    assignments: assignmentsFromSceneItems(items),
+  }
+}
 
 export async function hydrateCompositorFromPersistence(
   sessionId: string,
@@ -64,7 +90,7 @@ export async function hydrateCompositorFromPersistence(
       name: persisted.name,
       layout: persisted.layout || undefined,
       devices: persisted.devices,
-      sources: persisted.sources,
+      sources: prepareSourcesForHydrate(persisted.sources),
       background_music: persisted.background_music,
     }
     if (hasNonNullGraphicsLayers(sceneGraphics)) {

@@ -19,6 +19,8 @@ import { SceneItemsList } from '@/components/studio/sidebar/SceneItemsList'
 import { Button } from '@/components/ui/button'
 import { enumerateMediaDevices } from '@/lib/devices'
 import { mediaErrorMessage } from '@/lib/openMediaStream'
+import { normalizeDeviceLabel } from '@/lib/resolveDevice'
+import { sourceIdentityKey } from '@/lib/sourceCatalog'
 import { cn } from '@/lib/utils'
 import type { SessionSourcesStore } from '@/hooks/useSessionSourcesStore'
 import type { CameraSourceSettings, PreRecordedSourceSettings, SourceType } from '@/types/sources'
@@ -85,15 +87,16 @@ export function SourcesPanel({
   const pageSize = 12
   const totalPages = Math.max(1, Math.ceil(videosCount / pageSize))
 
-  const attachedCameraDeviceIds = useMemo(() => {
-    const ids = new Set<string>()
+  const attachedCameraKeys = useMemo(() => {
+    const keys = new Set<string>()
     for (const item of sourcesStore.sceneItems) {
       const source = sourcesStore.sourceById.get(item.sourceId)
       if (source?.type !== 'camera') continue
+      keys.add(sourceIdentityKey('camera', source.settings))
       const settings = source.settings as CameraSourceSettings
-      if (settings?.deviceId) ids.add(settings.deviceId)
+      if (settings?.deviceId) keys.add(`camera:id:${settings.deviceId}`)
     }
-    return ids
+    return keys
   }, [sourcesStore.sceneItems, sourcesStore.sourceById])
 
   const attachedCmsVideoUuids = useMemo(() => {
@@ -106,6 +109,23 @@ export function SourcesPanel({
     }
     return ids
   }, [sourcesStore.sceneItems, sourcesStore.sourceById])
+
+  const isCameraAttached = useCallback(
+    (device: VideoDeviceOption) => {
+      const byLabel = sourceIdentityKey('camera', {
+        deviceId: device.deviceId,
+        deviceLabel: device.label,
+      })
+      return (
+        attachedCameraKeys.has(byLabel) ||
+        attachedCameraKeys.has(`camera:id:${device.deviceId}`) ||
+        attachedCameraKeys.has(
+          `camera:label:${normalizeDeviceLabel(device.label)}`,
+        )
+      )
+    },
+    [attachedCameraKeys],
+  )
 
   const loadDevices = useCallback(async () => {
     setDevicesLoading(true)
@@ -153,6 +173,10 @@ export function SourcesPanel({
       toast.warning('Activate a scene before adding sources')
       return
     }
+    if (isCameraAttached(device)) {
+      toast.message(`${device.label} is already on this scene`)
+      return
+    }
     setBusyKey(`camera:${device.deviceId}`)
     try {
       const result = await sourcesStore.createAndAttach({
@@ -162,6 +186,7 @@ export function SourcesPanel({
           deviceId: device.deviceId,
           deviceLabel: device.label,
           peerId,
+          deviceAvailable: true,
         } satisfies CameraSourceSettings,
       })
       if (!result?.source) return
@@ -175,6 +200,7 @@ export function SourcesPanel({
               deviceLabel: device.label,
               peerId,
               producerId,
+              deviceAvailable: true,
             } satisfies CameraSourceSettings,
           })
         } catch (err) {
@@ -327,7 +353,7 @@ export function SourcesPanel({
                 <p className="py-4 text-center text-sm text-muted-foreground">No cameras found</p>
               ) : (
                 devices.map((device) => {
-                  const attached = attachedCameraDeviceIds.has(device.deviceId)
+                  const attached = isCameraAttached(device)
                   const busy = busyKey === `camera:${device.deviceId}`
                   return (
                     <button

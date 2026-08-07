@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
+import { listScenes } from '@/api/scenes'
 import {
   attachSourceToScene,
   createSource,
@@ -25,6 +26,7 @@ import {
   type UpdateSourceRequest,
 } from '@/types/sources'
 import { persistSceneSources } from '@/lib/persistenceSync'
+import { enrichSceneSourcesConfig } from '@/lib/sourceCatalog'
 
 const DEFAULT_POLL_MS = 5000
 
@@ -49,6 +51,8 @@ export function useSessionSourcesStore({
   const [sources, setSources] = useState<Source[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isMutating, setIsMutating] = useState(false)
+  const sourcesRef = useRef(sources)
+  sourcesRef.current = sources
 
   const sceneItems = useMemo(
     () => getSceneItems(sceneSourcesConfig),
@@ -71,14 +75,19 @@ export function useSessionSourcesStore({
   )
 
   const applySceneConfig = useCallback(
-    (config: SceneSourcesConfig) => {
-      onSceneSourcesUpdated?.(config)
+    (config: SceneSourcesConfig, extraSources: Source[] = []) => {
+      const enriched = enrichSceneSourcesConfig(config, sourcesRef.current, extraSources)
+      onSceneSourcesUpdated?.(enriched)
       if (sessionId && activeSceneId) {
-        void persistSceneSources(sessionId, activeSceneId, config)
+        void persistSceneSources(sessionId, activeSceneId, enriched)
       }
     },
     [onSceneSourcesUpdated, sessionId, activeSceneId],
   )
+
+  const replaceSources = useCallback((next: Source[]) => {
+    setSources(next)
+  }, [])
 
   const loadSources = useCallback(async () => {
     if (!sessionId) return
@@ -150,6 +159,16 @@ export function useSessionSourcesStore({
       try {
         await deleteSource(sessionId, sourceId)
         setSources((prev) => prev.filter((row) => row.id !== sourceId))
+        // Backend detaches from all scenes — refresh active scene config so tiles drop.
+        if (activeSceneId) {
+          try {
+            const scenes = await listScenes(sessionId)
+            const active = scenes.find((scene) => scene.scene_id === activeSceneId)
+            if (active) applySceneConfig(active.sources)
+          } catch {
+            // Best-effort; next poll/refresh will catch up.
+          }
+        }
         return true
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : 'Failed to remove source')
@@ -158,7 +177,7 @@ export function useSessionSourcesStore({
         setIsMutating(false)
       }
     },
-    [isHost, sessionId],
+    [isHost, sessionId, activeSceneId, applySceneConfig],
   )
 
   const play = useCallback(
@@ -320,14 +339,25 @@ export function useSessionSourcesStore({
     async (body: CreateSourceRequest) => {
       const source = await create(body)
       if (!source) return null
-      const config = await attach(source.id)
-      if (!config) {
-        // Source exists but attach failed — leave source in registry for retry.
+      if (!isHost || !sessionId || !activeSceneId) {
         return { source, config: null }
       }
-      return { source, config }
+      setIsMutating(true)
+      try {
+        const config = await attachSourceToScene(sessionId, activeSceneId, {
+          source_id: source.id,
+          visible: true,
+        })
+        applySceneConfig(config, [source])
+        return { source, config }
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : 'Failed to attach source')
+        return { source, config: null }
+      } finally {
+        setIsMutating(false)
+      }
     },
-    [create, attach],
+    [create, isHost, sessionId, activeSceneId, applySceneConfig],
   )
 
   return {
@@ -338,6 +368,7 @@ export function useSessionSourcesStore({
     isLoading,
     isMutating,
     loadSources,
+    replaceSources,
     create,
     update,
     remove,

@@ -32,6 +32,7 @@ import { isStudioChatEnabled } from '@/lib/studioChatEnv'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
+import { restoreSessionSources } from '@/lib/restoreSessionSources'
 import { applyActiveScenePreviewState } from '@/lib/applyActiveScenePreview'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
@@ -181,6 +182,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     error,
     micEnabled,
     webcamEnabled,
+    isPublished,
     toggleMic,
     toggleWebcam,
     publishProducers,
@@ -255,6 +257,55 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     onSceneSourcesUpdated: sceneStore.patchActiveSceneSourcesConfig,
   })
 
+  const { sources, replaceSources, play } = sessionSourcesStore
+
+  // Stabilize restore effect deps (store object identity changes each render).
+  const replaceSourcesRef = useRef(replaceSources)
+  replaceSourcesRef.current = replaceSources
+  const playSourceRef = useRef(play)
+  playSourceRef.current = play
+  const sceneRefreshRef = useRef(sceneStore.refresh)
+  sceneRefreshRef.current = sceneStore.refresh
+
+  const sourcesRestoredRef = useRef(false)
+
+  useEffect(() => {
+    if (!context.isHost || !roomEnabled || connectionState !== 'connected' || !isPublished) {
+      return
+    }
+    if (sourcesRestoredRef.current) return
+    sourcesRestoredRef.current = true
+
+    void (async () => {
+      try {
+        const result = await restoreSessionSources({
+          sessionId,
+          peerId: context.peerId,
+          produceCameraSource,
+          playSource: (sourceId) => playSourceRef.current(sourceId),
+        })
+        replaceSourcesRef.current(result.sources)
+        await sceneRefreshRef.current()
+        if (result.unavailableCameraLabels.length > 0) {
+          toast.message(
+            `Camera not available: ${result.unavailableCameraLabels.join(', ')}`,
+          )
+        }
+      } catch (err) {
+        sourcesRestoredRef.current = false
+        console.warn('[sources] restore after hydrate failed', err)
+      }
+    })()
+  }, [
+    context.isHost,
+    context.peerId,
+    roomEnabled,
+    connectionState,
+    isPublished,
+    sessionId,
+    produceCameraSource,
+  ])
+
   const tileOrder = useTileOrderStore({
     sessionId,
     isHost: context.isHost,
@@ -264,7 +315,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     roomId: context.roomId,
     activeSceneId: sceneStore.activeSceneId,
     sceneSourcesConfig: activeSceneSources,
-    sessionSources: sessionSourcesStore.sources,
+    sessionSources: sources,
     onSceneSourcesUpdated: sceneStore.patchActiveSceneSources,
   })
 

@@ -63,12 +63,15 @@ export function SceneItemCard({
   const type = row.source?.type ?? 'camera'
   const Icon = TYPE_ICON[type] ?? Camera
   const name = row.source?.name || row.sourceId
+  const deviceUnavailable =
+    type === 'camera' &&
+    (row.source?.settings as { deviceAvailable?: boolean } | undefined)?.deviceAvailable === false
 
   return (
     <div
       className={cn(
         'flex items-center gap-2 rounded-lg bg-background/60 p-2 transition-colors hover:bg-muted/50',
-        !row.visible && 'opacity-60',
+        (!row.visible || deviceUnavailable) && 'opacity-60',
         isDragOver && 'bg-primary/10 ring-1 ring-primary/40',
         isDragging && 'opacity-50',
       )}
@@ -122,7 +125,11 @@ export function SceneItemCard({
           </Badge>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          {row.visible ? `Order ${row.zIndex + 1}` : 'Hidden'}
+          {deviceUnavailable
+            ? 'Device not available on this machine'
+            : row.visible
+              ? `Order ${row.zIndex + 1}`
+              : 'Hidden'}
         </p>
       </div>
 

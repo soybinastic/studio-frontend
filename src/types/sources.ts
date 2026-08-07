@@ -16,6 +16,8 @@ export interface CameraSourceSettings {
   deviceLabel?: string
   peerId?: string
   producerId?: string
+  /** False when the labeled device is missing on this machine after hydrate. */
+  deviceAvailable?: boolean
 }
 
 export interface ScreenSourceSettings {
@@ -67,6 +69,16 @@ export type SourceSettings =
   | PdfSourceSettings
   | Record<string, unknown>
 
+/** Snapshot stored in scene `sources_config.sources` for cross-session restore. */
+export interface PersistedSourceSnapshot {
+  sourceId: string
+  type: SourceType
+  name: string
+  volume?: number
+  muted?: boolean
+  settings: SourceSettings
+}
+
 /** Session-scoped reusable media source (runtime). */
 export interface Source {
   id: string
@@ -98,13 +110,13 @@ export interface SceneSourcesConfigV2 {
   items: SceneItem[]
   /** Slot index → sourceId for layout strategies (derived from ordered visible items). */
   assignments?: Record<string, string>
-  /** Legacy unused list — kept for backward compat. */
-  sources?: unknown[]
+  /** Persisted Source catalog snapshots for hydrate/restore. */
+  sources?: PersistedSourceSnapshot[]
 }
 
 export interface SceneSourcesConfigV1 {
   version: 1
-  sources: unknown[]
+  sources: PersistedSourceSnapshot[] | unknown[]
   assignments?: Record<string, string>
   items?: SceneItem[]
 }
@@ -141,6 +153,7 @@ export interface CreateSourceRequest {
   settings?: SourceSettings
   volume?: number
   muted?: boolean
+  start?: boolean
 }
 
 export interface UpdateSourceRequest {
