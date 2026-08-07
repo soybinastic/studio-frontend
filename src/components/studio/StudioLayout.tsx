@@ -40,6 +40,7 @@ import {
   getLocalTenantConfiguration,
   persistDestinationsFromStream,
   persistLayout,
+  persistSceneLayout,
   persistGraphics,
   setPersistenceSessionId,
 } from '@/lib/persistenceSync'
@@ -370,9 +371,16 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       outputStore.setLayout(layout)
       await backendSync.syncLayout(layout)
       void persistLayout(layout)
+      if (sceneStore.activeSceneId) {
+        void persistSceneLayout(sessionId, sceneStore.activeSceneId, layout)
+        const active = sceneStore.scenes.find((scene) => scene.scene_id === sceneStore.activeSceneId)
+        if (active) {
+          sceneStore.patchScene({ ...active, layout })
+        }
+      }
       toast.success(`Layout: ${layout}`)
     },
-    [outputStore, backendSync],
+    [outputStore, backendSync, sceneStore, sessionId],
   )
 
   const handleActivateScene = useCallback(

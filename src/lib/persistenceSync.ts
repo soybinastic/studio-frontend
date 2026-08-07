@@ -103,6 +103,16 @@ export async function persistLayout(layout: LayoutType): Promise<void> {
   await persistConfiguration({ layout })
 }
 
+/** Persist layout on the active camera scene (not only tenant default). */
+export async function persistSceneLayout(
+  sessionId: string,
+  compositorSceneId: string | null | undefined,
+  layout: LayoutType,
+): Promise<void> {
+  if (!compositorSceneId) return
+  await persistSceneUpdate(sessionId, compositorSceneId, { layout })
+}
+
 export async function persistGraphics(
   graphics_config: Partial<GraphicsState>,
   sessionId?: string | null,
