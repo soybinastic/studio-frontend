@@ -1,8 +1,12 @@
+import { useEffect } from 'react'
 import type { ChatGraphic } from '@/types/graphics'
 import { chatPreviewStyle } from '@/lib/chatGeometry'
+import { cssFontFamily, ensureFontLoaded } from '@/lib/typography/cssAdapter'
+import { resolveDisplayFont } from '@/lib/typography/policy'
 
 interface PreviewChatLayerProps {
   chat: ChatGraphic
+  fonts?: string | null
 }
 
 function formatOverlayLine(message: ChatGraphic['messages'][number]): string {
@@ -13,13 +17,18 @@ function formatOverlayLine(message: ChatGraphic['messages'][number]): string {
   return text
 }
 
-export function PreviewChatLayer({ chat }: PreviewChatLayerProps) {
+export function PreviewChatLayer({ chat, fonts }: PreviewChatLayerProps) {
   const lines = (chat.messages ?? []).slice(-20)
+  const displayFont = resolveDisplayFont(fonts)
+
+  useEffect(() => {
+    ensureFontLoaded(displayFont)
+  }, [displayFont])
 
   return (
     <div
       className="absolute overflow-hidden rounded-sm bg-[rgb(10,10,14)]/70 p-2"
-      style={chatPreviewStyle()}
+      style={{ ...chatPreviewStyle(), fontFamily: cssFontFamily(displayFont) }}
       aria-hidden
     >
       {lines.length === 0 ? (
