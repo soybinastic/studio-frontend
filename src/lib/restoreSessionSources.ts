@@ -5,6 +5,7 @@ import { persistSceneSources } from '@/lib/persistenceSync'
 import { resolveMediaDevice } from '@/lib/resolveDevice'
 import {
   getCatalogFromSceneSources,
+  matchesHostWebcamDevice,
   sanitizeSourceSettingsForPersist,
   sourceIdentityKey,
   sourceToSnapshot,
@@ -22,6 +23,8 @@ import { assignmentsFromSceneItems, getSceneItems } from '@/types/sources'
 export interface RestoreSessionSourcesOptions {
   sessionId: string
   peerId: string
+  /** Host main webcam — skip producing Camera Sources that match (avoids duplicate program tiles). */
+  hostWebcam?: { deviceId?: string | null; label?: string | null }
   produceCameraSource?: (sourceId: string, deviceId: string) => Promise<{ producerId: string }>
   playSource?: (sourceId: string) => Promise<unknown>
 }
@@ -30,6 +33,7 @@ export interface RestoreSessionSourcesResult {
   sources: Source[]
   scenes: Scene[]
   unavailableCameraLabels: string[]
+  skippedHostWebcamDuplicates: string[]
 }
 
 function remapItems(items: SceneItem[], idMap: Map<string, string>, sceneId: string): SceneItem[] {
@@ -48,8 +52,9 @@ function remapItems(items: SceneItem[], idMap: Map<string, string>, sceneId: str
 export async function restoreSessionSources(
   options: RestoreSessionSourcesOptions,
 ): Promise<RestoreSessionSourcesResult> {
-  const { sessionId, peerId, produceCameraSource, playSource } = options
+  const { sessionId, peerId, hostWebcam, produceCameraSource, playSource } = options
   const unavailableCameraLabels: string[] = []
+  const skippedHostWebcamDuplicates: string[] = []
 
   let scenes = await listScenes(sessionId)
   let existing = await listSources(sessionId)
@@ -131,6 +136,27 @@ export async function restoreSessionSources(
         { deviceId: settings.deviceId, label: settings.deviceLabel },
         'videoinput',
       )
+
+      // Do not publish a Camera Source that duplicates the host main webcam.
+      const resolvedSettings: CameraSourceSettings = {
+        ...settings,
+        deviceId: device?.deviceId || settings.deviceId,
+        deviceLabel: device?.label || settings.deviceLabel,
+      }
+      if (matchesHostWebcamDevice(resolvedSettings, hostWebcam)) {
+        const label = resolvedSettings.deviceLabel || resolvedSettings.deviceId || source.name
+        skippedHostWebcamDuplicates.push(label)
+        const updated = await updateSource(sessionId, source.id, {
+          settings: {
+            ...resolvedSettings,
+            peerId,
+            deviceAvailable: false,
+          } satisfies CameraSourceSettings,
+        })
+        refreshed.push(updated)
+        continue
+      }
+
       if (!device || !produceCameraSource) {
         const label = settings.deviceLabel || settings.deviceId || source.name
         unavailableCameraLabels.push(label)
@@ -198,5 +224,6 @@ export async function restoreSessionSources(
     sources: [...byId.values()],
     scenes: await listScenes(sessionId),
     unavailableCameraLabels,
+    skippedHostWebcamDuplicates,
   }
 }

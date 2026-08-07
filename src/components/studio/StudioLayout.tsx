@@ -282,11 +282,20 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         const result = await restoreSessionSources({
           sessionId,
           peerId: context.peerId,
+          hostWebcam: {
+            deviceId: deviceStore.selection.cameraId,
+            label: deviceStore.selection.cameraLabel,
+          },
           produceCameraSource,
           playSource: (sourceId) => playSourceRef.current(sourceId),
         })
         replaceSourcesRef.current(result.sources)
         await sceneRefreshRef.current()
+        if (result.skippedHostWebcamDuplicates.length > 0) {
+          toast.message(
+            `Skipped Camera Source matching main webcam: ${result.skippedHostWebcamDuplicates.join(', ')}`,
+          )
+        }
         if (result.unavailableCameraLabels.length > 0) {
           toast.message(
             `Camera not available: ${result.unavailableCameraLabels.join(', ')}`,
@@ -305,6 +314,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     isPublished,
     sessionId,
     produceCameraSource,
+    deviceStore.selection.cameraId,
+    deviceStore.selection.cameraLabel,
   ])
 
   const tileOrder = useTileOrderStore({
@@ -887,6 +898,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           stopCameraSource={stopCameraSource}
           produceScreenShare={produceScreenShare}
           stopScreenShare={stopScreenShare}
+          hostWebcamDeviceId={deviceStore.selection.cameraId}
+          hostWebcamLabel={deviceStore.selection.cameraLabel}
           currentUserId={context.peerId}
           hostPeerId={hostPeerId}
           participants={participants}

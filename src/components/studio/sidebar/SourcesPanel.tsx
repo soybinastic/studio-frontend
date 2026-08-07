@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { enumerateMediaDevices } from '@/lib/devices'
 import { mediaErrorMessage } from '@/lib/openMediaStream'
 import { normalizeDeviceLabel } from '@/lib/resolveDevice'
-import { sourceIdentityKey } from '@/lib/sourceCatalog'
+import { matchesHostWebcamDevice, sourceIdentityKey } from '@/lib/sourceCatalog'
 import { cn } from '@/lib/utils'
 import type { SessionSourcesStore } from '@/hooks/useSessionSourcesStore'
 import type { CameraSourceSettings, PreRecordedSourceSettings, SourceType } from '@/types/sources'
@@ -55,6 +55,8 @@ interface SourcesPanelProps {
   activeSceneId: string | null
   sourcesStore: SessionSourcesStore
   peerId?: string
+  hostWebcamDeviceId?: string | null
+  hostWebcamLabel?: string | null
   produceCameraSource?: (sourceId: string, deviceId: string) => Promise<{ producerId: string }>
   stopCameraSource?: (sourceId: string) => Promise<void>
   produceScreenShare?: (sourceId: string) => Promise<{ producerId: string }>
@@ -70,6 +72,8 @@ export function SourcesPanel({
   activeSceneId,
   sourcesStore,
   peerId,
+  hostWebcamDeviceId,
+  hostWebcamLabel,
   produceCameraSource,
   stopCameraSource,
   produceScreenShare,
@@ -127,6 +131,15 @@ export function SourcesPanel({
     [attachedCameraKeys],
   )
 
+  const isHostWebcamDevice = useCallback(
+    (device: VideoDeviceOption) =>
+      matchesHostWebcamDevice(
+        { deviceId: device.deviceId, deviceLabel: device.label },
+        { deviceId: hostWebcamDeviceId, label: hostWebcamLabel },
+      ),
+    [hostWebcamDeviceId, hostWebcamLabel],
+  )
+
   const loadDevices = useCallback(async () => {
     setDevicesLoading(true)
     try {
@@ -171,6 +184,10 @@ export function SourcesPanel({
   const handleAddCamera = async (device: VideoDeviceOption) => {
     if (!activeSceneId) {
       toast.warning('Activate a scene before adding sources')
+      return
+    }
+    if (isHostWebcamDevice(device)) {
+      toast.message('That device is already the main scene camera')
       return
     }
     if (isCameraAttached(device)) {
@@ -354,16 +371,18 @@ export function SourcesPanel({
               ) : (
                 devices.map((device) => {
                   const attached = isCameraAttached(device)
+                  const isMainCam = isHostWebcamDevice(device)
+                  const blocked = attached || isMainCam
                   const busy = busyKey === `camera:${device.deviceId}`
                   return (
                     <button
                       key={device.deviceId}
                       type="button"
-                      disabled={attached || busy || sourcesStore.isMutating || !activeSceneId}
+                      disabled={blocked || busy || sourcesStore.isMutating || !activeSceneId}
                       onClick={() => void handleAddCamera(device)}
                       className={cn(
                         'flex w-full items-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-left text-sm transition-colors',
-                        attached
+                        blocked
                           ? 'opacity-40 cursor-not-allowed'
                           : 'hover:border-primary/40 hover:bg-muted/40',
                       )}
@@ -371,7 +390,10 @@ export function SourcesPanel({
                       <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{device.label}</span>
                       {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      {attached && (
+                      {isMainCam && (
+                        <span className="text-[10px] text-muted-foreground">Main cam</span>
+                      )}
+                      {attached && !isMainCam && (
                         <span className="text-[10px] text-muted-foreground">On scene</span>
                       )}
                     </button>

@@ -143,6 +143,22 @@ export function isCameraSourceAvailable(source: Source): boolean {
   return settings.deviceAvailable !== false
 }
 
+/** True when a Camera Source would duplicate the host's main webcam device. */
+export function matchesHostWebcamDevice(
+  settings: CameraSourceSettings | undefined,
+  host: { deviceId?: string | null; label?: string | null } | undefined,
+): boolean {
+  if (!settings || !host) return false
+  const hostId = host.deviceId?.trim()
+  const sourceId = settings.deviceId?.trim()
+  if (hostId && sourceId && hostId === sourceId) return true
+
+  const hostLabel = host.label ? normalizeDeviceLabel(host.label) : ''
+  const sourceLabel = settings.deviceLabel ? normalizeDeviceLabel(settings.deviceLabel) : ''
+  if (hostLabel && sourceLabel && hostLabel === sourceLabel) return true
+  return false
+}
+
 /** Visible scene attachments only (for preview / layout eligibility). */
 export function getVisibleAttachedSourceIds(
   config: SceneSourcesConfig | undefined | null,

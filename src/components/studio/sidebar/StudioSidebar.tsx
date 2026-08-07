@@ -62,6 +62,9 @@ interface StudioSidebarProps {
   stopCameraSource?: (sourceId: string) => Promise<void>
   produceScreenShare?: (sourceId: string) => Promise<{ producerId: string }>
   stopScreenShare?: (sourceId: string) => Promise<void>
+  /** Host main webcam — used to disable duplicate Camera Source picks. */
+  hostWebcamDeviceId?: string | null
+  hostWebcamLabel?: string | null
   currentUserId?: string
   hostPeerId?: string
   participants?: ParticipantMedia[]
@@ -150,6 +153,8 @@ export function StudioSidebar({
   stopCameraSource,
   produceScreenShare,
   stopScreenShare,
+  hostWebcamDeviceId,
+  hostWebcamLabel,
   currentUserId,
   hostPeerId,
   participants = [],
@@ -242,6 +247,8 @@ export function StudioSidebar({
               activeSceneId={activeSceneId}
               sourcesStore={sourcesStore}
               peerId={currentUserId}
+              hostWebcamDeviceId={hostWebcamDeviceId}
+              hostWebcamLabel={hostWebcamLabel}
               produceCameraSource={produceCameraSource}
               stopCameraSource={stopCameraSource}
               produceScreenShare={produceScreenShare}
