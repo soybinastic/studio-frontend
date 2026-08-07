@@ -4,11 +4,12 @@ import { BackgroundMusicPanel } from '@/components/studio/audio/BackgroundMusicP
 import { ChatPanel } from '@/components/studio/chat/ChatPanel'
 import { GraphicsPanel } from '@/components/studio/sidebar/GraphicsPanel'
 import { SourceTileList } from '@/components/studio/sidebar/SourceTileList'
-import { SourceCard, SOURCE_TYPES } from '@/components/studio/sidebar/SourceCard'
+import { SourcesPanel } from '@/components/studio/sidebar/SourcesPanel'
 import { InvitePanel } from '@/components/studio/InvitePanel'
 import { StudioPanelShell } from '@/components/studio/layout/StudioPanelShell'
 import { useIsDrawerMode, usePanelDefaultExpanded } from '@/hooks/useBreakpoint'
 import type { BackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
+import type { SessionSourcesStore } from '@/hooks/useSessionSourcesStore'
 import type { LayoutType } from '@/types/session'
 import type { SidebarTab } from '@/types/studio'
 import type { StudioTileSource } from '@/types/participants'
@@ -51,11 +52,16 @@ interface StudioSidebarProps {
   onPin: (sourceId: string) => void
   onHide: (sourceId: string) => void
   onMute?: (sourceId: string) => void
-  onAddSource?: (sourceId: string) => void
   isSyncing?: boolean
   drawerOpen?: boolean
   onDrawerOpenChange?: (open: boolean) => void
   sessionId?: string
+  activeSceneId?: string | null
+  sourcesStore?: SessionSourcesStore
+  produceCameraSource?: (sourceId: string, deviceId: string) => Promise<{ producerId: string }>
+  stopCameraSource?: (sourceId: string) => Promise<void>
+  produceScreenShare?: (sourceId: string) => Promise<{ producerId: string }>
+  stopScreenShare?: (sourceId: string) => Promise<void>
   currentUserId?: string
   hostPeerId?: string
   participants?: ParticipantMedia[]
@@ -134,11 +140,16 @@ export function StudioSidebar({
   onPin,
   onHide,
   onMute,
-  onAddSource,
   isSyncing,
   drawerOpen = false,
   onDrawerOpenChange,
   sessionId,
+  activeSceneId = null,
+  sourcesStore,
+  produceCameraSource,
+  stopCameraSource,
+  produceScreenShare,
+  stopScreenShare,
   currentUserId,
   hostPeerId,
   participants = [],
@@ -224,12 +235,18 @@ export function StudioSidebar({
             </div>
           )}
 
-          {activeTab === 'sources' && (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {SOURCE_TYPES.map((source) => (
-                <SourceCard key={source.id} source={source} onAdd={onAddSource} />
-              ))}
-            </div>
+          {activeTab === 'sources' && sourcesStore && (
+            <SourcesPanel
+              isHost={isHost}
+              sessionId={sessionId}
+              activeSceneId={activeSceneId}
+              sourcesStore={sourcesStore}
+              peerId={currentUserId}
+              produceCameraSource={produceCameraSource}
+              stopCameraSource={stopCameraSource}
+              produceScreenShare={produceScreenShare}
+              stopScreenShare={stopScreenShare}
+            />
           )}
 
           {activeTab === 'audio' && (

@@ -20,6 +20,7 @@ import { useRoom } from '@/hooks/useRoom'
 import { useBackendSync } from '@/hooks/useBackendSync'
 import { useOutputStore } from '@/hooks/useOutputStore'
 import { useTileOrderStore } from '@/hooks/useTileOrderStore'
+import { useSessionSourcesStore } from '@/hooks/useSessionSourcesStore'
 import { useGraphicsStore } from '@/hooks/useGraphicsStore'
 import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
@@ -184,6 +185,10 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     toggleWebcam,
     publishProducers,
     switchDevices,
+    produceCameraSource,
+    stopCameraSource,
+    produceScreenShare,
+    stopScreenShare,
     leave,
   } = useRoom({
     roomId: context.roomId,
@@ -242,6 +247,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     [sceneStore.scenes],
   )
 
+  const sessionSourcesStore = useSessionSourcesStore({
+    sessionId,
+    isHost: context.isHost,
+    activeSceneId: sceneStore.activeSceneId,
+    sceneSourcesConfig: activeSceneSources,
+    onSceneSourcesUpdated: sceneStore.patchActiveSceneSourcesConfig,
+  })
+
   const tileOrder = useTileOrderStore({
     sessionId,
     isHost: context.isHost,
@@ -251,6 +264,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     roomId: context.roomId,
     activeSceneId: sceneStore.activeSceneId,
     sceneSourcesConfig: activeSceneSources,
+    sessionSources: sessionSourcesStore.sources,
     onSceneSourcesUpdated: sceneStore.patchActiveSceneSources,
   })
 
@@ -799,10 +813,21 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onPin={tileOrder.togglePin}
           onHide={(sourceId) => void tileOrder.toggleHide(sourceId)}
           onMute={() => void toggleMic()}
-          isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing || backgroundMusicStore.isMutating}
+          isSyncing={
+            graphicsStore.isSyncing ||
+            tileOrder.isSyncing ||
+            backgroundMusicStore.isMutating ||
+            sessionSourcesStore.isMutating
+          }
           drawerOpen={controlsDrawerOpen}
           onDrawerOpenChange={setControlsDrawerOpen}
           sessionId={sessionId}
+          activeSceneId={sceneStore.activeSceneId}
+          sourcesStore={sessionSourcesStore}
+          produceCameraSource={produceCameraSource}
+          stopCameraSource={stopCameraSource}
+          produceScreenShare={produceScreenShare}
+          stopScreenShare={stopScreenShare}
           currentUserId={context.peerId}
           hostPeerId={hostPeerId}
           participants={participants}

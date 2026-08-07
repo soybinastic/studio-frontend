@@ -2,7 +2,7 @@ import type { ConnectionState, ParticipantMedia } from '@/types/session'
 
 export interface StudioTileSource {
   sourceId: string
-  kind: 'participant' | 'rtmp'
+  kind: 'participant' | 'rtmp' | 'camera' | 'screen' | 'prerecorded'
   displayName: string
   slotIndex: number
   isHost: boolean

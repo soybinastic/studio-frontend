@@ -11,6 +11,7 @@ import {
 import {
   mediaErrorMessage,
   openAudioStream,
+  openDisplayMediaStream,
   openVideoStream,
   stopMediaStream,
 } from '@/lib/openMediaStream'
@@ -61,6 +62,9 @@ export class RoomClient {
   private micStream: MediaStream | null = null
   private webcamProducer: MediasoupTypes.Producer | null = null
   private webcamStream: MediaStream | null = null
+  /** Studio Sources producers keyed by sourceId (camera / screen). Separate from webcam. */
+  private readonly sourceProducers = new Map<string, MediasoupTypes.Producer>()
+  private readonly sourceStreams = new Map<string, MediaStream>()
   private readonly remoteParticipants = new Map<string, RemoteParticipant>()
   private readonly consumingQueue = new AwaitQueue()
   private micEnabled = false
@@ -273,6 +277,101 @@ export class RoomClient {
   }
 
   /**
+   * Produce a Studio Sources camera feed as a separate producer (does not replace webcam).
+   * appData: `{ source: 'video', sourceId }`.
+   */
+  async produceCameraSource(
+    sourceId: string,
+    deviceId: string,
+  ): Promise<{ producerId: string }> {
+    if (!this.sendTransport || !this.device?.canProduce('video')) {
+      throw new Error('Cannot produce video — transport not ready.')
+    }
+    if (this.sourceProducers.has(sourceId)) {
+      const existing = this.sourceProducers.get(sourceId)!
+      return { producerId: existing.id }
+    }
+
+    const stream = await openVideoStream(deviceId, 'producer')
+    const track = stream.getVideoTracks()[0]
+    if (!track) {
+      stopMediaStream(stream)
+      throw new Error('No video track was returned.')
+    }
+
+    try {
+      const producer = await this.sendTransport.produce({
+        track,
+        appData: { source: 'video', sourceId },
+        codecOptions: WEBCAM_CODEC_OPTIONS,
+        encodings: WEBCAM_ENCODINGS,
+      })
+      this.sourceStreams.set(sourceId, stream)
+      this.sourceProducers.set(sourceId, producer)
+      producer.on('transportclose', () => {
+        this.sourceProducers.delete(sourceId)
+        this.stopSourceStream(sourceId)
+      })
+      return { producerId: producer.id }
+    } catch (err) {
+      stopMediaStream(stream)
+      throw err
+    }
+  }
+
+  async stopCameraSource(sourceId: string): Promise<void> {
+    await this.stopSourceProducer(sourceId)
+  }
+
+  /**
+   * Produce screen share as a SEPARATE producer (does not replace webcam).
+   * appData: `{ source: 'screensharing', sourceId }`.
+   */
+  async produceScreenShare(sourceId: string): Promise<{ producerId: string }> {
+    if (!this.sendTransport || !this.device?.canProduce('video')) {
+      throw new Error('Cannot produce video — transport not ready.')
+    }
+    if (this.sourceProducers.has(sourceId)) {
+      const existing = this.sourceProducers.get(sourceId)!
+      return { producerId: existing.id }
+    }
+
+    const stream = await openDisplayMediaStream({ audio: false })
+    const track = stream.getVideoTracks()[0]
+    if (!track) {
+      stopMediaStream(stream)
+      throw new Error('No screen video track was returned.')
+    }
+
+    track.addEventListener('ended', () => {
+      void this.stopScreenShare(sourceId)
+    })
+
+    try {
+      const producer = await this.sendTransport.produce({
+        track,
+        appData: { source: 'screensharing', sourceId },
+        codecOptions: WEBCAM_CODEC_OPTIONS,
+        encodings: WEBCAM_ENCODINGS,
+      })
+      this.sourceStreams.set(sourceId, stream)
+      this.sourceProducers.set(sourceId, producer)
+      producer.on('transportclose', () => {
+        this.sourceProducers.delete(sourceId)
+        this.stopSourceStream(sourceId)
+      })
+      return { producerId: producer.id }
+    } catch (err) {
+      stopMediaStream(stream)
+      throw err
+    }
+  }
+
+  async stopScreenShare(sourceId: string): Promise<void> {
+    await this.stopSourceProducer(sourceId)
+  }
+
+  /**
    * Apply scene/settings device prefs.
    *
    * Hybrid:
@@ -318,6 +417,9 @@ export class RoomClient {
       this.webcamProducer = null
     }
     this.stopWebcamStream()
+    for (const sourceId of [...this.sourceProducers.keys()]) {
+      void this.stopSourceProducer(sourceId)
+    }
     this.sendTransport?.close()
     this.recvTransport?.close()
     this.protoo?.close()
@@ -755,6 +857,21 @@ export class RoomClient {
   private stopWebcamStream(): void {
     stopMediaStream(this.webcamStream)
     this.webcamStream = null
+  }
+
+  private stopSourceStream(sourceId: string): void {
+    const stream = this.sourceStreams.get(sourceId)
+    stopMediaStream(stream)
+    this.sourceStreams.delete(sourceId)
+  }
+
+  private async stopSourceProducer(sourceId: string): Promise<void> {
+    const producer = this.sourceProducers.get(sourceId)
+    if (producer) {
+      this.closeAndNotifyProducer(producer)
+      this.sourceProducers.delete(sourceId)
+    }
+    this.stopSourceStream(sourceId)
   }
 
   private unlockAutoplay(): void {

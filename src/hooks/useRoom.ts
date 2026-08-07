@@ -54,6 +54,32 @@ export function useRoom({
     return client.replaceDevices(selection)
   }, [])
 
+  const produceCameraSource = useCallback(
+    async (sourceId: string, deviceId: string): Promise<{ producerId: string }> => {
+      const client = clientRef.current
+      if (!client) throw new Error('Room not connected')
+      return client.produceCameraSource(sourceId, deviceId)
+    },
+    [],
+  )
+
+  const stopCameraSource = useCallback(async (sourceId: string): Promise<void> => {
+    await clientRef.current?.stopCameraSource(sourceId)
+  }, [])
+
+  const produceScreenShare = useCallback(
+    async (sourceId: string): Promise<{ producerId: string }> => {
+      const client = clientRef.current
+      if (!client) throw new Error('Room not connected')
+      return client.produceScreenShare(sourceId)
+    },
+    [],
+  )
+
+  const stopScreenShare = useCallback(async (sourceId: string): Promise<void> => {
+    await clientRef.current?.stopScreenShare(sourceId)
+  }, [])
+
   useEffect(() => {
     if (!enabled || !roomId || !peerId || !displayName || !mediasoupWsUrl) {
       return
@@ -122,6 +148,10 @@ export function useRoom({
     toggleWebcam,
     publishProducers,
     switchDevices,
+    produceCameraSource,
+    stopCameraSource,
+    produceScreenShare,
+    stopScreenShare,
     leave,
   }
 }
