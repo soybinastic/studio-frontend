@@ -262,17 +262,10 @@ export async function persistSceneDelete(
 export async function persistSceneSources(
   sessionId: string,
   compositorSceneId: string,
-  sources:
-    | Record<string, string>
-    | {
-        version?: number
-        items?: unknown[]
-        assignments?: Record<string, string>
-        sources?: unknown[]
-      },
+  sources: Record<string, string> | NonNullable<UpdateSceneRequest['sources']>,
 ): Promise<void> {
   // Tile-order callers pass a slot→sourceId map; Sources panel passes full config.
-  const payload =
+  const payload: NonNullable<UpdateSceneRequest['sources']> =
     sources &&
     typeof sources === 'object' &&
     ('version' in sources || 'items' in sources)
