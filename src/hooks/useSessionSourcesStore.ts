@@ -81,7 +81,7 @@ export function useSessionSourcesStore({
   )
 
   const loadSources = useCallback(async () => {
-    if (!sessionId || !isHost) return
+    if (!sessionId) return
     try {
       const next = await listSources(sessionId)
       setSources(next)
@@ -90,22 +90,22 @@ export function useSessionSourcesStore({
         // Quiet on poll failures; surface on explicit load via toast only when mutating.
       }
     }
-  }, [sessionId, isHost])
+  }, [sessionId])
 
   useEffect(() => {
-    if (!sessionId || !isHost) {
+    if (!sessionId) {
       setSources([])
       return
     }
     setIsLoading(true)
     void loadSources().finally(() => setIsLoading(false))
-  }, [sessionId, isHost, loadSources])
+  }, [sessionId, loadSources])
 
   useEffect(() => {
-    if (!sessionId || !isHost || !pollMs || pollMs <= 0) return undefined
+    if (!sessionId || !pollMs || pollMs <= 0) return undefined
     const interval = window.setInterval(() => void loadSources(), pollMs)
     return () => window.clearInterval(interval)
-  }, [sessionId, isHost, pollMs, loadSources])
+  }, [sessionId, pollMs, loadSources])
 
   const create = useCallback(
     async (body: CreateSourceRequest) => {

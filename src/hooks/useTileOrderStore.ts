@@ -125,6 +125,7 @@ export function useTileOrderStore({
   const participantById = useMemo(() => {
     const map = new Map<string, ParticipantMedia>()
     for (const participant of participants) {
+      if (participant.sourceId) continue
       if (isCompositorPeer(participant.peerId, { roomId, displayName: participant.displayName })) {
         continue
       }
@@ -132,6 +133,16 @@ export function useTileOrderStore({
     }
     return map
   }, [participants, roomId])
+
+  /** Tracks for Studio Sources (local producers or remote consumers), keyed by sourceId. */
+  const sourceMediaById = useMemo(() => {
+    const map = new Map<string, ParticipantMedia>()
+    for (const participant of participants) {
+      if (!participant.sourceId) continue
+      map.set(participant.sourceId, participant)
+    }
+    return map
+  }, [participants])
 
   const attachedSessionSourceIds = useMemo(() => {
     const attached = new Set(getSceneItems(sceneSourcesConfig).map((item) => item.sourceId))
@@ -207,6 +218,7 @@ export function useTileOrderStore({
           sessionSource.type === 'prerecorded'
             ? sessionSource.type
             : 'rtmp'
+        const media = sourceMediaById.get(sourceId)
         return {
           sourceId,
           kind,
@@ -216,6 +228,10 @@ export function useTileOrderStore({
           isHidden,
           isPinned: pinnedIds.has(sourceId),
           isSpeaking: false,
+          isLocal: media?.isLocal,
+          videoEnabled: Boolean(media?.videoTrack),
+          videoTrack: media?.videoTrack,
+          audioTrack: media?.audioTrack,
         }
       }
 
@@ -234,6 +250,7 @@ export function useTileOrderStore({
     },
     [
       participantById,
+      sourceMediaById,
       sessionSourceById,
       rtmpSources,
       effectiveHostPeerId,

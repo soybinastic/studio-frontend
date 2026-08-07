@@ -133,7 +133,7 @@ export function useRoom({
     }
   }, [enabled, roomId, peerId, displayName, mediasoupWsUrl, autoPublish])
 
-  const localParticipant = participants.find((p) => p.isLocal)
+  const localParticipant = participants.find((p) => p.isLocal && !p.sourceId)
   const micEnabled = localParticipant?.audioEnabled ?? false
   const webcamEnabled = localParticipant?.videoEnabled ?? false
 

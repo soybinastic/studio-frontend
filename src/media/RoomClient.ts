@@ -311,7 +311,9 @@ export class RoomClient {
       producer.on('transportclose', () => {
         this.sourceProducers.delete(sourceId)
         this.stopSourceStream(sourceId)
+        this.emitParticipants()
       })
+      this.emitParticipants()
       return { producerId: producer.id }
     } catch (err) {
       stopMediaStream(stream)
@@ -359,7 +361,9 @@ export class RoomClient {
       producer.on('transportclose', () => {
         this.sourceProducers.delete(sourceId)
         this.stopSourceStream(sourceId)
+        this.emitParticipants()
       })
+      this.emitParticipants()
       return { producerId: producer.id }
     } catch (err) {
       stopMediaStream(stream)
@@ -609,7 +613,7 @@ export class RoomClient {
         producerId: string
         kind: MediasoupTypes.MediaKind
         rtpParameters: MediasoupTypes.RtpParameters
-        appData: { source?: string }
+        appData: { source?: string; sourceId?: string }
       }
 
       if (this.shouldExcludePeer(data.peerId)) {
@@ -618,12 +622,14 @@ export class RoomClient {
       }
 
       try {
+        const sourceId = data.appData?.sourceId
         const consumer = await this.recvTransport.consume({
           id: data.consumerId,
           producerId: data.producerId,
           kind: data.kind,
           rtpParameters: data.rtpParameters,
-          streamId: `${data.peerId}-av`,
+          // Distinct MSID so multiple videos from one peer don't share a stream.
+          streamId: sourceId ? `${data.peerId}-${sourceId}` : `${data.peerId}-av`,
           appData: { ...data.appData, peerId: data.peerId },
         })
 
@@ -715,6 +721,19 @@ export class RoomClient {
       },
     ]
 
+    for (const [sourceId, producer] of this.sourceProducers.entries()) {
+      if (producer.closed) continue
+      participants.push({
+        peerId: sourceId,
+        displayName: sourceId,
+        videoTrack: producer.track ?? undefined,
+        audioEnabled: false,
+        videoEnabled: Boolean(producer.track),
+        isLocal: true,
+        sourceId,
+      })
+    }
+
     for (const [peerId, remote] of this.remoteParticipants.entries()) {
       if (this.shouldExcludePeer(peerId, remote.displayName)) {
         this.remoteParticipants.delete(peerId)
@@ -725,8 +744,13 @@ export class RoomClient {
       let videoTrack: MediaStreamTrack | undefined
 
       for (const consumer of remote.consumers.values()) {
-        if (consumer.kind === 'audio') audioTrack = consumer.track
-        if (consumer.kind === 'video') videoTrack = consumer.track
+        const consumerSourceId = (consumer.appData as { sourceId?: string }).sourceId
+        if (consumer.kind === 'audio' && !consumerSourceId) {
+          audioTrack = consumer.track
+        }
+        if (consumer.kind === 'video' && !consumerSourceId) {
+          videoTrack = consumer.track
+        }
       }
 
       participants.push({
@@ -738,6 +762,20 @@ export class RoomClient {
         videoEnabled: Boolean(videoTrack),
         isLocal: false,
       })
+
+      for (const consumer of remote.consumers.values()) {
+        const consumerSourceId = (consumer.appData as { sourceId?: string }).sourceId
+        if (!consumerSourceId || consumer.kind !== 'video') continue
+        participants.push({
+          peerId: consumerSourceId,
+          displayName: consumerSourceId,
+          videoTrack: consumer.track,
+          audioEnabled: false,
+          videoEnabled: Boolean(consumer.track),
+          isLocal: false,
+          sourceId: consumerSourceId,
+        })
+      }
     }
 
     this.options.onParticipantsChange?.(participants)
@@ -872,6 +910,7 @@ export class RoomClient {
       this.sourceProducers.delete(sourceId)
     }
     this.stopSourceStream(sourceId)
+    this.emitParticipants()
   }
 
   private unlockAutoplay(): void {
