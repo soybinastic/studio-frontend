@@ -75,9 +75,7 @@ export function SourcesPanel({
   hostWebcamDeviceId,
   hostWebcamLabel,
   produceCameraSource,
-  stopCameraSource,
   produceScreenShare,
-  stopScreenShare,
 }: SourcesPanelProps) {
   const [category, setCategory] = useState<CategoryId | null>(null)
   const [devices, setDevices] = useState<VideoDeviceOption[]>([])
@@ -196,7 +194,7 @@ export function SourcesPanel({
     }
     setBusyKey(`camera:${device.deviceId}`)
     try {
-      const result = await sourcesStore.createAndAttach({
+      const result = await sourcesStore.createOrAttach({
         type: 'camera',
         name: device.label,
         settings: {
@@ -207,24 +205,34 @@ export function SourcesPanel({
         } satisfies CameraSourceSettings,
       })
       if (!result?.source) return
+      if (result.alreadyAttached) {
+        toast.message(`${device.label} is already on this scene`)
+        return
+      }
 
+      // RoomClient is idempotent — skips a second getUserMedia if this sourceId is live.
       if (produceCameraSource) {
         try {
           const { producerId } = await produceCameraSource(result.source.id, device.deviceId)
-          await sourcesStore.update(result.source.id, {
-            settings: {
-              deviceId: device.deviceId,
-              deviceLabel: device.label,
-              peerId,
-              producerId,
-              deviceAvailable: true,
-            } satisfies CameraSourceSettings,
-          })
+          const existingSettings = result.source.settings as CameraSourceSettings
+          if (existingSettings.producerId !== producerId || !result.reused) {
+            await sourcesStore.update(result.source.id, {
+              settings: {
+                deviceId: device.deviceId,
+                deviceLabel: device.label,
+                peerId,
+                producerId,
+                deviceAvailable: true,
+              } satisfies CameraSourceSettings,
+            })
+          }
         } catch (err) {
           toast.error(mediaErrorMessage(err, 'Could not publish camera'))
         }
       }
-      toast.success(`Added ${device.label}`)
+      toast.success(
+        result.reused ? `Attached ${device.label} to this scene` : `Added ${device.label}`,
+      )
     } finally {
       setBusyKey(null)
     }
@@ -237,27 +245,38 @@ export function SourcesPanel({
     }
     setBusyKey('screen')
     try {
-      const result = await sourcesStore.createAndAttach({
+      const result = await sourcesStore.createOrAttach({
         type: 'screen',
         name: 'Screen Share',
         settings: { peerId },
       })
       if (!result?.source) return
+      if (result.alreadyAttached) {
+        toast.message('Screen share is already on this scene')
+        return
+      }
 
       if (produceScreenShare) {
         try {
           const { producerId } = await produceScreenShare(result.source.id)
-          await sourcesStore.update(result.source.id, {
-            settings: { peerId, producerId },
-          })
+          const existingSettings = result.source.settings as { producerId?: string }
+          if (existingSettings.producerId !== producerId || !result.reused) {
+            await sourcesStore.update(result.source.id, {
+              settings: { peerId, producerId },
+            })
+          }
         } catch (err) {
           toast.error(mediaErrorMessage(err, 'Could not share screen'))
-          await sourcesStore.detach(result.source.id)
-          await sourcesStore.remove(result.source.id)
+          if (!result.reused) {
+            await sourcesStore.detach(result.source.id)
+            await sourcesStore.remove(result.source.id)
+          }
           return
         }
       }
-      toast.success('Screen share added')
+      toast.success(
+        result.reused ? 'Attached screen share to this scene' : 'Screen share added',
+      )
     } finally {
       setBusyKey(null)
     }
@@ -268,6 +287,10 @@ export function SourcesPanel({
       toast.warning('Activate a scene before adding sources')
       return
     }
+    if (attachedCmsVideoUuids.has(video.uuid)) {
+      toast.message(`${video.title || 'Video'} is already on this scene`)
+      return
+    }
     const mediaUrl = resolveMediaUrl(video)
     if (!mediaUrl) {
       toast.error('This video has no playable media URL')
@@ -275,7 +298,7 @@ export function SourcesPanel({
     }
     setBusyKey(`video:${video.uuid}`)
     try {
-      const result = await sourcesStore.createAndAttach({
+      const result = await sourcesStore.createOrAttach({
         type: 'prerecorded',
         name: video.title || 'Pre-recorded Video',
         settings: {
@@ -286,23 +309,27 @@ export function SourcesPanel({
           mediaUrl,
         } satisfies PreRecordedSourceSettings,
       })
-      if (result?.source) {
-        void sourcesStore.play(result.source.id)
-        toast.success(`Added ${video.title || 'video'}`)
+      if (!result?.source) return
+      if (result.alreadyAttached) {
+        toast.message(`${video.title || 'Video'} is already on this scene`)
+        return
       }
+      // Keep playback running when reusing; play() is safe if already active.
+      void sourcesStore.play(result.source.id)
+      toast.success(
+        result.reused
+          ? `Attached ${video.title || 'video'} to this scene`
+          : `Added ${video.title || 'video'}`,
+      )
     } finally {
       setBusyKey(null)
     }
   }
 
   const handleDetach = async (sourceId: string) => {
-    const source = sourcesStore.sourceById.get(sourceId)
+    // Detach from this scene only — do not stop produce. The same Source may
+    // still be attached (and visible) on another scene.
     await sourcesStore.detach(sourceId)
-    if (source?.type === 'camera') {
-      await stopCameraSource?.(sourceId)
-    } else if (source?.type === 'screen') {
-      await stopScreenShare?.(sourceId)
-    }
   }
 
   if (!isHost) {

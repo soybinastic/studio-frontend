@@ -26,7 +26,7 @@ import {
   type UpdateSourceRequest,
 } from '@/types/sources'
 import { persistSceneSources } from '@/lib/persistenceSync'
-import { enrichSceneSourcesConfig } from '@/lib/sourceCatalog'
+import { enrichSceneSourcesConfig, findMatchingSessionSource } from '@/lib/sourceCatalog'
 
 const DEFAULT_POLL_MS = 5000
 
@@ -340,7 +340,7 @@ export function useSessionSourcesStore({
       const source = await create(body)
       if (!source) return null
       if (!isHost || !sessionId || !activeSceneId) {
-        return { source, config: null }
+        return { source, config: null as SceneSourcesConfig | null, reused: false as const }
       }
       setIsMutating(true)
       try {
@@ -349,15 +349,72 @@ export function useSessionSourcesStore({
           visible: true,
         })
         applySceneConfig(config, [source])
-        return { source, config }
+        return { source, config, reused: false as const }
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : 'Failed to attach source')
-        return { source, config: null }
+        return { source, config: null as SceneSourcesConfig | null, reused: false as const }
       } finally {
         setIsMutating(false)
       }
     },
     [create, isHost, sessionId, activeSceneId, applySceneConfig],
+  )
+
+  /**
+   * Attach an existing session Source to the active scene when identity matches,
+   * otherwise create + attach. Does not auto-attach to other scenes.
+   */
+  const createOrAttach = useCallback(
+    async (body: CreateSourceRequest) => {
+      if (!isHost || !sessionId || !activeSceneId) return null
+
+      const existing = findMatchingSessionSource(
+        sourcesRef.current,
+        body.type,
+        body.settings,
+      )
+      if (existing) {
+        if (attachedSourceIds.has(existing.id)) {
+          return {
+            source: existing,
+            config: null as SceneSourcesConfig | null,
+            reused: true as const,
+            alreadyAttached: true as const,
+          }
+        }
+        setIsMutating(true)
+        try {
+          const config = await attachSourceToScene(sessionId, activeSceneId, {
+            source_id: existing.id,
+            visible: true,
+          })
+          applySceneConfig(config, [existing])
+          return {
+            source: existing,
+            config,
+            reused: true as const,
+            alreadyAttached: false as const,
+          }
+        } catch (err) {
+          toast.error(err instanceof ApiError ? err.message : 'Failed to attach source')
+          return null
+        } finally {
+          setIsMutating(false)
+        }
+      }
+
+      const created = await createAndAttach(body)
+      if (!created) return null
+      return { ...created, alreadyAttached: false as const }
+    },
+    [
+      isHost,
+      sessionId,
+      activeSceneId,
+      attachedSourceIds,
+      applySceneConfig,
+      createAndAttach,
+    ],
   )
 
   return {
@@ -381,6 +438,7 @@ export function useSessionSourcesStore({
     setVisibility,
     reorder,
     createAndAttach,
+    createOrAttach,
   }
 }
 

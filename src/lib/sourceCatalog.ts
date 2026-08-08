@@ -68,6 +68,44 @@ export function sourceIdentityKey(type: SourceType, settings: SourceSettings | u
   return `${type}:${JSON.stringify(raw)}`
 }
 
+/**
+ * Find a session-registry Source that matches type + device/CMS identity.
+ * Used so Scene B can attach the same sourceId as Scene A instead of creating a duplicate.
+ */
+export function findMatchingSessionSource(
+  sources: Source[],
+  type: SourceType,
+  settings: SourceSettings | undefined,
+): Source | undefined {
+  const wantKey = sourceIdentityKey(type, settings)
+  const wantCamera = type === 'camera' ? (settings as CameraSourceSettings | undefined) : undefined
+  const wantDeviceId = wantCamera?.deviceId?.trim() || ''
+  const wantLabel = wantCamera?.deviceLabel
+    ? normalizeDeviceLabel(wantCamera.deviceLabel)
+    : ''
+
+  for (const source of sources) {
+    if (source.type !== type) continue
+    if (sourceIdentityKey(source.type, source.settings) === wantKey) {
+      return source
+    }
+    if (type === 'camera') {
+      const existing = source.settings as CameraSourceSettings
+      const existingId = existing.deviceId?.trim() || ''
+      if (wantDeviceId && existingId && wantDeviceId === existingId) {
+        return source
+      }
+      const existingLabel = existing.deviceLabel
+        ? normalizeDeviceLabel(existing.deviceLabel)
+        : ''
+      if (wantLabel && existingLabel && wantLabel === existingLabel) {
+        return source
+      }
+    }
+  }
+  return undefined
+}
+
 export function sourceToSnapshot(source: Source): PersistedSourceSnapshot {
   return {
     sourceId: source.id,
