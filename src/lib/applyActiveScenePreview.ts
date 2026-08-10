@@ -11,7 +11,7 @@ interface ApplyActiveScenePreviewOptions {
   backgroundMusicStore: { applySceneConfig: (config: BackgroundMusicConfig | null | undefined) => void }
   deviceStore?: { setSelection: (selection: Partial<DeviceSelection>) => void }
   tenantDevices?: DeviceSelection | null
-  /** When false, scene/tenant device IDs are not applied (device setup modal owns selection). */
+  /** When true, seed deviceStore from active scene (or tenant) devices. */
   applyDevicePreferences?: boolean
 }
 
