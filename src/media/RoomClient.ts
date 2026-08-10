@@ -616,13 +616,15 @@ export class RoomClient {
         appData: { source?: string; sourceId?: string }
       }
 
-      if (this.shouldExcludePeer(data.peerId)) {
+      const sourceId = data.appData?.sourceId
+      // Compositor peer is hidden from the roster, but Source-tagged producers
+      // (e.g. prerecorded URI SFU egress) must still be consumable for preview.
+      if (this.shouldExcludePeer(data.peerId) && !sourceId) {
         reject(403, 'Cannot consume system peer')
         return
       }
 
       try {
-        const sourceId = data.appData?.sourceId
         const consumer = await this.recvTransport.consume({
           id: data.consumerId,
           producerId: data.producerId,
@@ -735,8 +737,26 @@ export class RoomClient {
     }
 
     for (const [peerId, remote] of this.remoteParticipants.entries()) {
-      if (this.shouldExcludePeer(peerId, remote.displayName)) {
-        this.remoteParticipants.delete(peerId)
+      const isSystemPeer = this.shouldExcludePeer(peerId, remote.displayName)
+
+      // Source-tagged consumers (camera / screen / prerecorded) — including those
+      // produced by the compositor BroadcasterPeer for URI preview.
+      for (const consumer of remote.consumers.values()) {
+        const consumerSourceId = (consumer.appData as { sourceId?: string }).sourceId
+        if (!consumerSourceId || consumer.kind !== 'video') continue
+        participants.push({
+          peerId: consumerSourceId,
+          displayName: consumerSourceId,
+          videoTrack: consumer.track,
+          audioEnabled: false,
+          videoEnabled: Boolean(consumer.track),
+          isLocal: false,
+          sourceId: consumerSourceId,
+        })
+      }
+
+      if (isSystemPeer) {
+        // Keep the remote entry so Source consumers stay alive; never show a seat.
         continue
       }
 
@@ -762,20 +782,6 @@ export class RoomClient {
         videoEnabled: Boolean(videoTrack),
         isLocal: false,
       })
-
-      for (const consumer of remote.consumers.values()) {
-        const consumerSourceId = (consumer.appData as { sourceId?: string }).sourceId
-        if (!consumerSourceId || consumer.kind !== 'video') continue
-        participants.push({
-          peerId: consumerSourceId,
-          displayName: consumerSourceId,
-          videoTrack: consumer.track,
-          audioEnabled: false,
-          videoEnabled: Boolean(consumer.track),
-          isLocal: false,
-          sourceId: consumerSourceId,
-        })
-      }
     }
 
     this.options.onParticipantsChange?.(participants)
