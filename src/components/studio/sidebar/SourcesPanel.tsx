@@ -307,6 +307,7 @@ export function SourcesPanel({
           thumbnailUrl: video.thumbnail ?? undefined,
           duration: video.duration ?? undefined,
           mediaUrl,
+          loop: true,
         } satisfies PreRecordedSourceSettings,
       })
       if (!result?.source) return

@@ -41,7 +41,8 @@ export function sanitizeSourceSettingsForPersist(
       thumbnailUrl: raw.thumbnailUrl ? String(raw.thumbnailUrl) : undefined,
       duration: raw.duration ? String(raw.duration) : undefined,
       mediaUrl: String(raw.mediaUrl ?? ''),
-      loop: raw.loop === true,
+      // Default on so compositor seeks on EOF instead of deactivating the tile.
+      loop: raw.loop !== false,
     } satisfies PreRecordedSourceSettings
   }
 
