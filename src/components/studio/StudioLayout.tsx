@@ -14,7 +14,7 @@ import { SceneDevicePickerModal } from '@/components/studio/scenes/SceneDevicePi
 import { DeviceSetupModal } from '@/components/studio/device-setup/DeviceSetupModal'
 import { YouTubeGoLiveErrorDialog } from '@/components/studio/YouTubeGoLiveErrorDialog'
 import { useDeviceStore } from '@/hooks/useDeviceStore'
-import { hasSceneDevices } from '@/lib/devices'
+import { hasSceneDevices, resolvePreferredSetupDevices } from '@/lib/devices'
 import { countdownSecondsRemaining } from '@/lib/countdown'
 import { useRoom } from '@/hooks/useRoom'
 import { useBackendSync } from '@/hooks/useBackendSync'
@@ -129,6 +129,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     scenes: sceneStore.scenes,
     onSceneUpdated: sceneStore.patchScene,
   })
+  const preferredSetupDevices = useMemo(
+    () =>
+      resolvePreferredSetupDevices(
+        sceneStore.scenes,
+        getLocalTenantConfiguration()?.devices ?? configuration?.devices ?? null,
+      ),
+    [sceneStore.scenes, configuration?.devices],
+  )
   const prevCountdownActive = useRef(false)
   const hydrationStartedRef = useRef(false)
 
@@ -159,7 +167,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           outputStore,
           graphicsStore,
           backgroundMusicStore,
-          applyDevicePreferences: false,
+          deviceStore,
+          tenantDevices: config.devices,
+          applyDevicePreferences: true,
         })
         await graphicsStore.refresh({ force: true })
       } catch (err) {
@@ -775,12 +785,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         deviceStore={deviceStore}
         open={showDeviceSetup}
         onConfirm={handleDeviceConfirm}
+        preferredDevices={preferredSetupDevices}
       />
 
       <SceneDevicePickerModal
         open={showSceneDevicePicker}
         onConfirm={(selection) => void handleSceneDevicesConfirm(selection)}
         onCancel={() => setShowSceneDevicePicker(false)}
+        preferredDevices={deviceStore.selection}
       />
 
       <AddSceneModal

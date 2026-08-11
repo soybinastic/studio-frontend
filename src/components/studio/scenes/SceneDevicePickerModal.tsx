@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select'
 import { AudioMeter } from '@/components/studio/device-setup/AudioMeter'
 import { CameraPreview } from '@/components/studio/device-setup/CameraPreview'
-import { enumerateMediaDevices, pickDefaultSelection } from '@/lib/devices'
+import { enumerateMediaDevices, hasSceneDevices, pickDefaultSelection } from '@/lib/devices'
 import { mediaErrorMessage, openAvPreviewStream, stopMediaStream } from '@/lib/openMediaStream'
 import { resolveSelectionDevices, selectionFromMediaDevice } from '@/lib/resolveDevice'
 import { EMPTY_DEVICE_SELECTION, type DeviceSelection, type MediaDeviceInfo } from '@/types/devices'
@@ -20,9 +20,16 @@ interface SceneDevicePickerModalProps {
   open: boolean
   onConfirm: (selection: DeviceSelection) => void
   onCancel: () => void
+  /** Prefill from current studio selection when opening. */
+  preferredDevices?: DeviceSelection | null
 }
 
-export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevicePickerModalProps) {
+export function SceneDevicePickerModal({
+  open,
+  onConfirm,
+  onCancel,
+  preferredDevices = null,
+}: SceneDevicePickerModalProps) {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [selection, setSelection] = useState<DeviceSelection>({ ...EMPTY_DEVICE_SELECTION })
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null)
@@ -109,6 +116,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
     let cancelled = false
     setPermissionError(null)
     setIsEnumerating(true)
+    const preferredAtOpen = preferredDevices
 
     void (async () => {
       try {
@@ -121,7 +129,11 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
         const list = await enumerateMediaDevices()
         if (cancelled) return
 
-        const defaults = pickDefaultSelection(list, { ...EMPTY_DEVICE_SELECTION })
+        const preferred =
+          preferredAtOpen && hasSceneDevices(preferredAtOpen)
+            ? preferredAtOpen
+            : { ...EMPTY_DEVICE_SELECTION }
+        const defaults = pickDefaultSelection(list, preferred)
         setDevices(list)
         setSelection(defaults)
         setIsEnumerating(false)
@@ -138,7 +150,7 @@ export function SceneDevicePickerModal({ open, onConfirm, onCancel }: SceneDevic
       cancelled = true
       stopPreview()
     }
-  }, [open, startPreview, stopPreview])
+  }, [open, startPreview, stopPreview]) // eslint-disable-line react-hooks/exhaustive-deps -- capture preferredDevices when modal opens
 
   const cameras = devices.filter((d) => d.kind === 'videoinput')
   const microphones = devices.filter((d) => d.kind === 'audioinput')

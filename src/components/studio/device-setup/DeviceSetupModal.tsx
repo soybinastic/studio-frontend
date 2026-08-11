@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Camera, Mic, MicOff, Speaker, Video, VideoOff, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -12,15 +12,24 @@ import {
 import { AudioMeter } from '@/components/studio/device-setup/AudioMeter'
 import { CameraPreview } from '@/components/studio/device-setup/CameraPreview'
 import type { DeviceStore } from '@/hooks/useDeviceStore'
+import { hasSceneDevices } from '@/lib/devices'
 import { selectionFromMediaDevice } from '@/lib/resolveDevice'
+import type { DeviceSelection } from '@/types/devices'
 
 interface DeviceSetupModalProps {
   deviceStore: DeviceStore
   onConfirm: () => void
   open: boolean
+  /** Active scene (or tenant) device prefs to pre-select on load. */
+  preferredDevices?: DeviceSelection | null
 }
 
-export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupModalProps) {
+export function DeviceSetupModal({
+  deviceStore,
+  onConfirm,
+  open,
+  preferredDevices = null,
+}: DeviceSetupModalProps) {
   const {
     cameras,
     microphones,
@@ -37,6 +46,10 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
     isEnumerating,
     selectSpeaker,
   } = deviceStore
+
+  const appliedPreferredRef = useRef(false)
+  const preferredRef = useRef(preferredDevices)
+  preferredRef.current = preferredDevices
 
   const handleCameraChange = (cameraId: string) => {
     const device = cameras.find((d) => d.deviceId === cameraId)
@@ -60,15 +73,35 @@ export function DeviceSetupModal({ deviceStore, onConfirm, open }: DeviceSetupMo
   }
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      appliedPreferredRef.current = false
+      return
+    }
 
+    let cancelled = false
     void (async () => {
-      const nextSelection = await deviceStore.initializeDevices()
-      if (nextSelection) {
-        void deviceStore.startPreview(nextSelection)
+      const nextSelection = await deviceStore.initializeDevices(preferredRef.current)
+      if (cancelled || !nextSelection) return
+      if (preferredRef.current && hasSceneDevices(preferredRef.current)) {
+        appliedPreferredRef.current = true
       }
+      void deviceStore.startPreview(nextSelection)
     })()
+
+    return () => {
+      cancelled = true
+    }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scenes/tenant prefs may arrive after the modal already opened.
+  useEffect(() => {
+    if (!open || appliedPreferredRef.current) return
+    if (!preferredDevices || !hasSceneDevices(preferredDevices)) return
+    if (deviceStore.devices.length === 0) return
+
+    appliedPreferredRef.current = true
+    void deviceStore.startPreview(preferredDevices)
+  }, [open, preferredDevices, deviceStore.devices.length, deviceStore.startPreview])
 
   if (!open) return null
 
