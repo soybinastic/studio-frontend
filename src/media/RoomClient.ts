@@ -740,16 +740,28 @@ export class RoomClient {
       const isSystemPeer = this.shouldExcludePeer(peerId, remote.displayName)
 
       // Source-tagged consumers (camera / screen / prerecorded) — including those
-      // produced by the compositor BroadcasterPeer for URI preview.
+      // produced by the compositor BroadcasterPeer for URI preview. Group A/V by
+      // sourceId so mosaic tiles get soundtrack (program already mixes via GStreamer).
+      const sourceTracks = new Map<
+        string,
+        { videoTrack?: MediaStreamTrack; audioTrack?: MediaStreamTrack }
+      >()
       for (const consumer of remote.consumers.values()) {
         const consumerSourceId = (consumer.appData as { sourceId?: string }).sourceId
-        if (!consumerSourceId || consumer.kind !== 'video') continue
+        if (!consumerSourceId) continue
+        const entry = sourceTracks.get(consumerSourceId) ?? {}
+        if (consumer.kind === 'video') entry.videoTrack = consumer.track
+        if (consumer.kind === 'audio') entry.audioTrack = consumer.track
+        sourceTracks.set(consumerSourceId, entry)
+      }
+      for (const [consumerSourceId, tracks] of sourceTracks) {
         participants.push({
           peerId: consumerSourceId,
           displayName: consumerSourceId,
-          videoTrack: consumer.track,
-          audioEnabled: false,
-          videoEnabled: Boolean(consumer.track),
+          videoTrack: tracks.videoTrack,
+          audioTrack: tracks.audioTrack,
+          audioEnabled: Boolean(tracks.audioTrack?.enabled),
+          videoEnabled: Boolean(tracks.videoTrack),
           isLocal: false,
           sourceId: consumerSourceId,
         })

@@ -10,6 +10,11 @@ export function normalizeDeviceLabel(label: string): string {
   return label.trim().toLowerCase()
 }
 
+/** Strip browser fallback suffixes like "Camera (a1b2c3d4)" for rematch after refresh. */
+export function normalizeDeviceLabelForMatch(label: string): string {
+  return normalizeDeviceLabel(label).replace(/\s*\([0-9a-f]{4,}\)\s*$/i, '')
+}
+
 export function resolveMediaDevice(
   devices: MediaDeviceInfo[],
   pref: DevicePreference,
@@ -24,8 +29,10 @@ export function resolveMediaDevice(
   }
 
   if (pref.label) {
-    const normalized = normalizeDeviceLabel(pref.label)
-    const matches = list.filter((d) => normalizeDeviceLabel(d.label) === normalized)
+    const normalized = normalizeDeviceLabelForMatch(pref.label)
+    const matches = list.filter(
+      (d) => normalizeDeviceLabelForMatch(d.label) === normalized,
+    )
     if (matches.length === 1) return matches[0]
     if (matches.length > 1 && pref.groupId) {
       const byGroup = matches.find((d) => d.groupId === pref.groupId)

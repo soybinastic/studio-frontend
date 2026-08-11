@@ -63,9 +63,13 @@ export function SceneItemCard({
   const type = row.source?.type ?? 'camera'
   const Icon = TYPE_ICON[type] ?? Camera
   const name = row.source?.name || row.sourceId
+  const cameraSettings = row.source?.settings as
+    | { deviceAvailable?: boolean; hostWebcamDuplicate?: boolean }
+    | undefined
   const deviceUnavailable =
-    type === 'camera' &&
-    (row.source?.settings as { deviceAvailable?: boolean } | undefined)?.deviceAvailable === false
+    type === 'camera' && cameraSettings?.deviceAvailable === false
+  const hostWebcamDuplicate =
+    type === 'camera' && cameraSettings?.hostWebcamDuplicate === true
 
   return (
     <div
@@ -127,9 +131,11 @@ export function SceneItemCard({
         <p className="text-[10px] text-muted-foreground">
           {deviceUnavailable
             ? 'Device not available on this machine'
-            : row.visible
-              ? `Order ${row.zIndex + 1}`
-              : 'Hidden'}
+            : hostWebcamDuplicate
+              ? 'Covered by main webcam'
+              : row.visible
+                ? `Order ${row.zIndex + 1}`
+                : 'Hidden'}
         </p>
       </div>
 
