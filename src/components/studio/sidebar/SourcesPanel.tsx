@@ -557,6 +557,11 @@ export function SourcesPanel({
               void sourcesStore.setVisibility(sourceId, visible)
             }
             onDetach={(sourceId) => void handleDetach(sourceId)}
+            onPlay={(sourceId) => sourcesStore.play(sourceId)}
+            onPause={(sourceId) => sourcesStore.pause(sourceId)}
+            onSeek={(sourceId, positionMs) => sourcesStore.seek(sourceId, positionMs)}
+            onVolumeChange={(sourceId, volume) => sourcesStore.setVolume(sourceId, volume)}
+            onMutedChange={(sourceId, muted) => sourcesStore.setMuted(sourceId, muted)}
           />
         )}
       </div>

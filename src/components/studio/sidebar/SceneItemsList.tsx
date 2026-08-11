@@ -13,6 +13,11 @@ interface SceneItemsListProps {
   onReorder: (fromIndex: number, toIndex: number) => void
   onToggleVisibility: (sourceId: string, visible: boolean) => void
   onDetach: (sourceId: string) => void
+  onPlay?: (sourceId: string) => Promise<unknown>
+  onPause?: (sourceId: string) => Promise<unknown>
+  onSeek?: (sourceId: string, positionMs: number) => Promise<unknown>
+  onVolumeChange?: (sourceId: string, volume: number) => Promise<unknown>
+  onMutedChange?: (sourceId: string, muted: boolean) => Promise<unknown>
 }
 
 export function SceneItemsList({
@@ -23,6 +28,11 @@ export function SceneItemsList({
   onReorder,
   onToggleVisibility,
   onDetach,
+  onPlay,
+  onPause,
+  onSeek,
+  onVolumeChange,
+  onMutedChange,
 }: SceneItemsListProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
@@ -76,7 +86,9 @@ export function SceneItemsList({
   return (
     <div className="space-y-1">
       {isHost && canSort && (
-        <p className="px-0.5 text-[10px] text-muted-foreground">Drag to reorder · eye toggles visibility</p>
+        <p className="px-0.5 text-[10px] text-muted-foreground">
+          Drag to reorder · eye toggles visibility · chevron opens video controls
+        </p>
       )}
 
       {canSort && dragIndex !== null && (
@@ -107,6 +119,11 @@ export function SceneItemsList({
           onDrop={() => handleDrop(index)}
           onToggleVisibility={isHost ? onToggleVisibility : undefined}
           onDetach={isHost ? onDetach : undefined}
+          onPlay={isHost ? onPlay : undefined}
+          onPause={isHost ? onPause : undefined}
+          onSeek={isHost ? onSeek : undefined}
+          onVolumeChange={isHost ? onVolumeChange : undefined}
+          onMutedChange={isHost ? onMutedChange : undefined}
         />
       ))}
     </div>

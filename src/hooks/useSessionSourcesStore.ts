@@ -152,6 +152,32 @@ export function useSessionSourcesStore({
     [isHost, sessionId],
   )
 
+  /** Lightweight PATCH for volume/mute — does not toggle list-wide isMutating. */
+  const patchPlayback = useCallback(
+    async (sourceId: string, body: Pick<UpdateSourceRequest, 'volume' | 'muted'>) => {
+      if (!isHost || !sessionId) return null
+      try {
+        const source = await updateSource(sessionId, sourceId, body)
+        setSources((prev) => prev.map((row) => (row.id === sourceId ? source : row)))
+        return source
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : 'Failed to update playback')
+        return null
+      }
+    },
+    [isHost, sessionId],
+  )
+
+  const setVolume = useCallback(
+    (sourceId: string, volume: number) => patchPlayback(sourceId, { volume }),
+    [patchPlayback],
+  )
+
+  const setMuted = useCallback(
+    (sourceId: string, muted: boolean) => patchPlayback(sourceId, { muted }),
+    [patchPlayback],
+  )
+
   const remove = useCallback(
     async (sourceId: string) => {
       if (!isHost || !sessionId) return false
@@ -433,6 +459,8 @@ export function useSessionSourcesStore({
     pause,
     stop,
     seek,
+    setVolume,
+    setMuted,
     attach,
     detach,
     setVisibility,
