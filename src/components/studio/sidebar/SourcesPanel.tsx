@@ -330,11 +330,18 @@ export function SourcesPanel({
     try {
       await stopScreenShare?.(sourceId)
       const source = sourcesStore.sourceById.get(sourceId)
-      const settings = { ...(source?.settings as ScreenSourceSettings | undefined) }
-      delete settings.producerId
-      delete settings.audioProducerId
+      const settings = {
+        ...(source?.settings as ScreenSourceSettings | undefined),
+        producerId: undefined,
+        audioProducerId: undefined,
+      }
+      // Explicit nulls so the API clears persisted producer ids.
       await sourcesStore.update(sourceId, {
-        settings,
+        settings: {
+          ...settings,
+          producerId: null,
+          audioProducerId: null,
+        } as ScreenSourceSettings,
         state: 'STOPPED',
       })
       toast.message('Screen share stopped')
@@ -364,9 +371,11 @@ export function SourcesPanel({
     if (source?.type === 'screen' && stopScreenShare) {
       try {
         await stopScreenShare(sourceId)
-        const settings = { ...(source.settings as ScreenSourceSettings) }
-        delete settings.producerId
-        delete settings.audioProducerId
+        const settings = {
+          ...(source.settings as ScreenSourceSettings),
+          producerId: null,
+          audioProducerId: null,
+        } as ScreenSourceSettings
         await sourcesStore.update(sourceId, { settings, state: 'STOPPED' })
       } catch {
         // Detach already succeeded; produce stop is best-effort.

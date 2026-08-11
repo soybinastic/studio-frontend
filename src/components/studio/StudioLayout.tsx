@@ -291,9 +291,12 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       const store = sessionSourcesStoreRef.current
       const source = store.sourceById.get(sourceId)
       if (!source || source.type !== 'screen') return
-      const settings = { ...(source.settings as Record<string, unknown>) }
-      delete settings.producerId
-      delete settings.audioProducerId
+      const settings = {
+        ...(source.settings as Record<string, unknown>),
+        // null clears keys on the compositor PATCH (merge treats null as delete).
+        producerId: null,
+        audioProducerId: null,
+      }
       void store.update(sourceId, { settings, state: 'STOPPED' })
     })
     return () => setSourceStoppedListener(null)
