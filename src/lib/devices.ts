@@ -54,3 +54,18 @@ export function normalizeDeviceSelection(raw: Partial<DeviceSelection> | null | 
     speakerId: raw.speakerId ?? null,
   }
 }
+
+/** Active scene devices first, then tenant-level fallback. */
+export function resolvePreferredSetupDevices(
+  scenes: Array<{ is_active?: boolean; devices?: DeviceSelection | null }>,
+  tenantDevices?: DeviceSelection | null,
+): DeviceSelection | null {
+  const active = scenes.find((scene) => scene.is_active)
+  if (active?.devices && hasSceneDevices(active.devices)) {
+    return normalizeDeviceSelection(active.devices)
+  }
+  if (tenantDevices && hasSceneDevices(tenantDevices)) {
+    return normalizeDeviceSelection(tenantDevices)
+  }
+  return null
+}

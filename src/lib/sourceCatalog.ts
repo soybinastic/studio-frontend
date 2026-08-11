@@ -1,4 +1,4 @@
-import { normalizeDeviceLabel } from '@/lib/resolveDevice'
+import { normalizeDeviceLabel, normalizeDeviceLabelForMatch } from '@/lib/resolveDevice'
 import type {
   CameraSourceSettings,
   PersistedSourceSnapshot,
@@ -21,9 +21,11 @@ export function sanitizeSourceSettingsForPersist(
   delete raw.producerId
 
   if (type === 'camera') {
+    delete raw.hostWebcamDuplicate
     return {
       deviceId: String(raw.deviceId ?? ''),
       deviceLabel: raw.deviceLabel ? String(raw.deviceLabel) : undefined,
+      // Only persist explicit unavailability; host-webcam skip is session-local.
       deviceAvailable: raw.deviceAvailable === false ? false : undefined,
     } satisfies CameraSourceSettings
   }
@@ -41,7 +43,8 @@ export function sanitizeSourceSettingsForPersist(
       thumbnailUrl: raw.thumbnailUrl ? String(raw.thumbnailUrl) : undefined,
       duration: raw.duration ? String(raw.duration) : undefined,
       mediaUrl: String(raw.mediaUrl ?? ''),
-      loop: raw.loop === true,
+      // Default on so compositor seeks on EOF instead of deactivating the tile.
+      loop: raw.loop !== false,
     } satisfies PreRecordedSourceSettings
   }
 
@@ -191,8 +194,10 @@ export function matchesHostWebcamDevice(
   const sourceId = settings.deviceId?.trim()
   if (hostId && sourceId && hostId === sourceId) return true
 
-  const hostLabel = host.label ? normalizeDeviceLabel(host.label) : ''
-  const sourceLabel = settings.deviceLabel ? normalizeDeviceLabel(settings.deviceLabel) : ''
+  const hostLabel = host.label ? normalizeDeviceLabelForMatch(host.label) : ''
+  const sourceLabel = settings.deviceLabel
+    ? normalizeDeviceLabelForMatch(settings.deviceLabel)
+    : ''
   if (hostLabel && sourceLabel && hostLabel === sourceLabel) return true
   return false
 }
