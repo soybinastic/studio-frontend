@@ -18,6 +18,8 @@ export interface CameraSourceSettings {
   producerId?: string
   /** False when the labeled device is missing on this machine after hydrate. */
   deviceAvailable?: boolean
+  /** True when restore skipped produce because this is the host main webcam. */
+  hostWebcamDuplicate?: boolean
 }
 
 export interface ScreenSourceSettings {

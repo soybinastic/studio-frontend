@@ -150,7 +150,9 @@ export async function restoreSessionSources(
           settings: {
             ...resolvedSettings,
             peerId,
-            deviceAvailable: false,
+            // Not "missing on this machine" — covered by the host main webcam produce.
+            deviceAvailable: true,
+            hostWebcamDuplicate: true,
           } satisfies CameraSourceSettings,
         })
         refreshed.push(updated)
@@ -165,6 +167,7 @@ export async function restoreSessionSources(
             ...settings,
             peerId,
             deviceAvailable: false,
+            hostWebcamDuplicate: false,
           } satisfies CameraSourceSettings,
         })
         refreshed.push(updated)
@@ -180,6 +183,7 @@ export async function restoreSessionSources(
             peerId,
             producerId,
             deviceAvailable: true,
+            hostWebcamDuplicate: false,
           } satisfies CameraSourceSettings,
         })
         refreshed.push(updated)
@@ -192,6 +196,7 @@ export async function restoreSessionSources(
             deviceLabel: device.label || settings.deviceLabel,
             peerId,
             deviceAvailable: false,
+            hostWebcamDuplicate: false,
           } satisfies CameraSourceSettings,
         })
         refreshed.push(updated)
