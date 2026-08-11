@@ -26,6 +26,8 @@ export interface StudioParticipant extends ParticipantMedia {
   isSpeaking: boolean
   connectionStatus: ConnectionState
   avatarUrl?: string
+  /** Studio source kind when this tile is a session source (camera/screen/…). */
+  sourceKind?: StudioTileSource['kind']
 }
 
 export function tileSourceToStudioParticipant(source: StudioTileSource): StudioParticipant {
@@ -43,6 +45,7 @@ export function tileSourceToStudioParticipant(source: StudioTileSource): StudioP
     isHidden: source.isHidden,
     isSpeaking: source.isSpeaking,
     connectionStatus: source.connectionStatus ?? 'connected',
+    sourceKind: source.kind,
   }
 }
 
