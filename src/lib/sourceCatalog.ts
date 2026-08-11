@@ -19,6 +19,7 @@ export function sanitizeSourceSettingsForPersist(
   const raw = { ...(settings ?? {}) } as Record<string, unknown>
   delete raw.peerId
   delete raw.producerId
+  delete raw.audioProducerId
 
   if (type === 'camera') {
     delete raw.hostWebcamDuplicate

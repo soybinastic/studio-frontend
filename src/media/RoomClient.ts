@@ -43,6 +43,8 @@ export interface RoomClientOptions {
   onStateChange?: (state: ConnectionState) => void
   onParticipantsChange?: (participants: ParticipantMedia[]) => void
   onError?: (error: Error) => void
+  /** Fired after a studio source producer (camera/screen) is fully stopped. */
+  onSourceStopped?: (sourceId: string) => void
 }
 
 interface RemoteParticipant {
@@ -62,9 +64,12 @@ export class RoomClient {
   private micStream: MediaStream | null = null
   private webcamProducer: MediasoupTypes.Producer | null = null
   private webcamStream: MediaStream | null = null
-  /** Studio Sources producers keyed by sourceId (camera / screen). Separate from webcam. */
+  /** Studio Sources video producers keyed by sourceId (camera / screen). */
   private readonly sourceProducers = new Map<string, MediasoupTypes.Producer>()
+  /** Optional system/tab audio for screen sources (same sourceId). */
+  private readonly sourceAudioProducers = new Map<string, MediasoupTypes.Producer>()
   private readonly sourceStreams = new Map<string, MediaStream>()
+  private sourceStoppedListener: ((sourceId: string) => void) | null = null
   private readonly remoteParticipants = new Map<string, RemoteParticipant>()
   private readonly consumingQueue = new AwaitQueue()
   private micEnabled = false
@@ -74,6 +79,11 @@ export class RoomClient {
   constructor(options: RoomClientOptions) {
     this.options = options
     this.devicePreferences = options.devicePreferences ?? null
+    this.sourceStoppedListener = options.onSourceStopped ?? null
+  }
+
+  setSourceStoppedListener(listener: ((sourceId: string) => void) | null): void {
+    this.sourceStoppedListener = listener
   }
 
   setDevicePreferences(preferences: DeviceSelection | null): void {
@@ -327,31 +337,48 @@ export class RoomClient {
 
   /**
    * Produce screen share as a SEPARATE producer (does not replace webcam).
-   * appData: `{ source: 'screensharing', sourceId }`.
+   * appData video: `{ source: 'screensharing', sourceId }`.
+   * Optional system/tab audio: `{ source: 'audio', sourceId }` (same sourceId).
+   * Continues with video-only when the browser grants no audio track.
    */
-  async produceScreenShare(sourceId: string): Promise<{ producerId: string }> {
+  async produceScreenShare(
+    sourceId: string,
+    options?: { withSystemAudio?: boolean },
+  ): Promise<{ producerId: string; audioProducerId?: string }> {
     if (!this.sendTransport || !this.device?.canProduce('video')) {
       throw new Error('Cannot produce video — transport not ready.')
     }
     if (this.sourceProducers.has(sourceId)) {
       const existing = this.sourceProducers.get(sourceId)!
-      return { producerId: existing.id }
+      const existingAudio = this.sourceAudioProducers.get(sourceId)
+      return {
+        producerId: existing.id,
+        audioProducerId: existingAudio && !existingAudio.closed ? existingAudio.id : undefined,
+      }
     }
 
-    const stream = await openDisplayMediaStream({ audio: false })
-    const track = stream.getVideoTracks()[0]
-    if (!track) {
+    const withSystemAudio = Boolean(options?.withSystemAudio)
+    const stream = await openDisplayMediaStream({ audio: withSystemAudio })
+    const videoTrack = stream.getVideoTracks()[0]
+    if (!videoTrack) {
       stopMediaStream(stream)
       throw new Error('No screen video track was returned.')
     }
 
-    track.addEventListener('ended', () => {
+    videoTrack.addEventListener('ended', () => {
       void this.stopScreenShare(sourceId)
     })
 
+    const audioTrack = stream.getAudioTracks()[0]
+    if (audioTrack) {
+      audioTrack.addEventListener('ended', () => {
+        void this.stopSourceAudioProducer(sourceId)
+      })
+    }
+
     try {
       const producer = await this.sendTransport.produce({
-        track,
+        track: videoTrack,
         appData: { source: 'screensharing', sourceId },
         codecOptions: WEBCAM_CODEC_OPTIONS,
         encodings: WEBCAM_ENCODINGS,
@@ -360,11 +387,34 @@ export class RoomClient {
       this.sourceProducers.set(sourceId, producer)
       producer.on('transportclose', () => {
         this.sourceProducers.delete(sourceId)
+        void this.stopSourceAudioProducer(sourceId)
         this.stopSourceStream(sourceId)
         this.emitParticipants()
+        this.notifySourceStopped(sourceId)
       })
+
+      let audioProducerId: string | undefined
+      if (audioTrack && this.device.canProduce('audio')) {
+        try {
+          const audioProducer = await this.sendTransport.produce({
+            track: audioTrack,
+            appData: { source: 'audio', sourceId },
+            codecOptions: OPUS_CODEC_OPTIONS,
+          })
+          this.sourceAudioProducers.set(sourceId, audioProducer)
+          audioProducerId = audioProducer.id
+          audioProducer.on('transportclose', () => {
+            this.sourceAudioProducers.delete(sourceId)
+            this.emitParticipants()
+          })
+        } catch (audioErr) {
+          // Video share still succeeds when system audio produce fails.
+          this.reportError(audioErr, 'Screen video started without system audio.')
+        }
+      }
+
       this.emitParticipants()
-      return { producerId: producer.id }
+      return { producerId: producer.id, audioProducerId }
     } catch (err) {
       stopMediaStream(stream)
       throw err
@@ -423,6 +473,9 @@ export class RoomClient {
     this.stopWebcamStream()
     for (const sourceId of [...this.sourceProducers.keys()]) {
       void this.stopSourceProducer(sourceId)
+    }
+    for (const sourceId of [...this.sourceAudioProducers.keys()]) {
+      void this.stopSourceAudioProducer(sourceId)
     }
     this.sendTransport?.close()
     this.recvTransport?.close()
@@ -725,11 +778,15 @@ export class RoomClient {
 
     for (const [sourceId, producer] of this.sourceProducers.entries()) {
       if (producer.closed) continue
+      const audioProducer = this.sourceAudioProducers.get(sourceId)
+      const audioTrack =
+        audioProducer && !audioProducer.closed ? audioProducer.track ?? undefined : undefined
       participants.push({
         peerId: sourceId,
         displayName: sourceId,
         videoTrack: producer.track ?? undefined,
-        audioEnabled: false,
+        audioTrack,
+        audioEnabled: Boolean(audioTrack),
         videoEnabled: Boolean(producer.track),
         isLocal: true,
         sourceId,
@@ -921,14 +978,33 @@ export class RoomClient {
     this.sourceStreams.delete(sourceId)
   }
 
+  private async stopSourceAudioProducer(sourceId: string): Promise<void> {
+    const audioProducer = this.sourceAudioProducers.get(sourceId)
+    if (audioProducer) {
+      this.closeAndNotifyProducer(audioProducer)
+      this.sourceAudioProducers.delete(sourceId)
+    }
+  }
+
+  private notifySourceStopped(sourceId: string): void {
+    try {
+      // Prefer the mutable listener; constructor onSourceStopped seeds it.
+      this.sourceStoppedListener?.(sourceId)
+    } catch {
+      // Listener errors must not break teardown.
+    }
+  }
+
   private async stopSourceProducer(sourceId: string): Promise<void> {
     const producer = this.sourceProducers.get(sourceId)
     if (producer) {
       this.closeAndNotifyProducer(producer)
       this.sourceProducers.delete(sourceId)
     }
+    await this.stopSourceAudioProducer(sourceId)
     this.stopSourceStream(sourceId)
     this.emitParticipants()
+    this.notifySourceStopped(sourceId)
   }
 
   private unlockAutoplay(): void {

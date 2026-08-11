@@ -23,7 +23,12 @@ import { normalizeDeviceLabel } from '@/lib/resolveDevice'
 import { matchesHostWebcamDevice, sourceIdentityKey } from '@/lib/sourceCatalog'
 import { cn } from '@/lib/utils'
 import type { SessionSourcesStore } from '@/hooks/useSessionSourcesStore'
-import type { CameraSourceSettings, PreRecordedSourceSettings, SourceType } from '@/types/sources'
+import type {
+  CameraSourceSettings,
+  PreRecordedSourceSettings,
+  ScreenSourceSettings,
+  SourceType,
+} from '@/types/sources'
 
 type CategoryId = SourceType
 
@@ -59,7 +64,10 @@ interface SourcesPanelProps {
   hostWebcamLabel?: string | null
   produceCameraSource?: (sourceId: string, deviceId: string) => Promise<{ producerId: string }>
   stopCameraSource?: (sourceId: string) => Promise<void>
-  produceScreenShare?: (sourceId: string) => Promise<{ producerId: string }>
+  produceScreenShare?: (
+    sourceId: string,
+    options?: { withSystemAudio?: boolean },
+  ) => Promise<{ producerId: string; audioProducerId?: string }>
   stopScreenShare?: (sourceId: string) => Promise<void>
 }
 
@@ -76,6 +84,7 @@ export function SourcesPanel({
   hostWebcamLabel,
   produceCameraSource,
   produceScreenShare,
+  stopScreenShare,
 }: SourcesPanelProps) {
   const [category, setCategory] = useState<CategoryId | null>(null)
   const [devices, setDevices] = useState<VideoDeviceOption[]>([])
@@ -85,6 +94,7 @@ export function SourcesPanel({
   const [videosCount, setVideosCount] = useState(0)
   const [videosLoading, setVideosLoading] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [withSystemAudio, setWithSystemAudio] = useState(false)
 
   const pageSize = 12
   const totalPages = Math.max(1, Math.ceil(videosCount / pageSize))
@@ -248,7 +258,7 @@ export function SourcesPanel({
       const result = await sourcesStore.createOrAttach({
         type: 'screen',
         name: 'Screen Share',
-        settings: { peerId },
+        settings: { peerId, withSystemAudio },
       })
       if (!result?.source) return
       if (result.alreadyAttached) {
@@ -258,13 +268,18 @@ export function SourcesPanel({
 
       if (produceScreenShare) {
         try {
-          const { producerId } = await produceScreenShare(result.source.id)
-          const existingSettings = result.source.settings as { producerId?: string }
-          if (existingSettings.producerId !== producerId || !result.reused) {
-            await sourcesStore.update(result.source.id, {
-              settings: { peerId, producerId },
-            })
-          }
+          const { producerId, audioProducerId } = await produceScreenShare(result.source.id, {
+            withSystemAudio,
+          })
+          await sourcesStore.update(result.source.id, {
+            settings: {
+              peerId,
+              producerId,
+              ...(audioProducerId ? { audioProducerId } : {}),
+              withSystemAudio,
+            },
+            state: 'ACTIVE',
+          })
         } catch (err) {
           toast.error(mediaErrorMessage(err, 'Could not share screen'))
           if (!result.reused) {
@@ -279,6 +294,83 @@ export function SourcesPanel({
       )
     } finally {
       setBusyKey(null)
+    }
+  }
+
+  const handleStartScreenShare = async (sourceId: string) => {
+    if (!produceScreenShare) return
+    const source = sourcesStore.sourceById.get(sourceId)
+    const settings = (source?.settings ?? {}) as ScreenSourceSettings
+    const wantAudio = Boolean(settings.withSystemAudio)
+    setBusyKey(`screen-start:${sourceId}`)
+    try {
+      const { producerId, audioProducerId } = await produceScreenShare(sourceId, {
+        withSystemAudio: wantAudio,
+      })
+      await sourcesStore.update(sourceId, {
+        settings: {
+          ...settings,
+          peerId: peerId ?? settings.peerId,
+          producerId,
+          ...(audioProducerId ? { audioProducerId } : { audioProducerId: undefined }),
+          withSystemAudio: wantAudio,
+        },
+        state: 'ACTIVE',
+      })
+      toast.success('Screen sharing')
+    } catch (err) {
+      toast.error(mediaErrorMessage(err, 'Could not share screen'))
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const handleStopScreenShare = async (sourceId: string) => {
+    setBusyKey(`screen-stop:${sourceId}`)
+    try {
+      await stopScreenShare?.(sourceId)
+      const source = sourcesStore.sourceById.get(sourceId)
+      const settings = { ...(source?.settings as ScreenSourceSettings | undefined) }
+      delete settings.producerId
+      delete settings.audioProducerId
+      await sourcesStore.update(sourceId, {
+        settings,
+        state: 'STOPPED',
+      })
+      toast.message('Screen share stopped')
+    } catch (err) {
+      toast.error(mediaErrorMessage(err, 'Could not stop screen share'))
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const handleToggleScreenSystemAudio = async (
+    sourceId: string,
+    nextWithSystemAudio: boolean,
+  ) => {
+    const source = sourcesStore.sourceById.get(sourceId)
+    if (!source || source.type !== 'screen') return
+    const settings = { ...(source.settings as ScreenSourceSettings) }
+    await sourcesStore.update(sourceId, {
+      settings: { ...settings, withSystemAudio: nextWithSystemAudio },
+    })
+  }
+
+  const handleDetach = async (sourceId: string) => {
+    const source = sourcesStore.sourceById.get(sourceId)
+    await sourcesStore.detach(sourceId)
+    // Stop live produce when leaving this scene (Wave A). Re-share from the row if needed.
+    if (source?.type === 'screen' && stopScreenShare) {
+      try {
+        await stopScreenShare(sourceId)
+        const settings = { ...(source.settings as ScreenSourceSettings) }
+        delete settings.producerId
+        delete settings.audioProducerId
+        await sourcesStore.update(sourceId, { settings, state: 'STOPPED' })
+      } catch {
+        // Detach already succeeded; produce stop is best-effort.
+      }
     }
   }
 
@@ -325,12 +417,6 @@ export function SourcesPanel({
     } finally {
       setBusyKey(null)
     }
-  }
-
-  const handleDetach = async (sourceId: string) => {
-    // Detach from this scene only — do not stop produce. The same Source may
-    // still be attached (and visible) on another scene.
-    await sourcesStore.detach(sourceId)
   }
 
   if (!isHost) {
@@ -432,19 +518,30 @@ export function SourcesPanel({
           )}
 
           {category === 'screen' && (
-            <Button
-              type="button"
-              className="w-full"
-              disabled={busyKey === 'screen' || sourcesStore.isMutating || !activeSceneId}
-              onClick={() => void handleShareScreen()}
-            >
-              {busyKey === 'screen' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Monitor className="mr-2 h-4 w-4" />
-              )}
-              Share screen
-            </Button>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-primary"
+                  checked={withSystemAudio}
+                  onChange={(event) => setWithSystemAudio(event.target.checked)}
+                />
+                Share tab/system audio (when the browser allows)
+              </label>
+              <Button
+                type="button"
+                className="w-full"
+                disabled={busyKey === 'screen' || sourcesStore.isMutating || !activeSceneId}
+                onClick={() => void handleShareScreen()}
+              >
+                {busyKey === 'screen' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Monitor className="mr-2 h-4 w-4" />
+                )}
+                Share screen
+              </Button>
+            </div>
           )}
 
           {category === 'prerecorded' && (
@@ -551,7 +648,9 @@ export function SourcesPanel({
             items={sourcesStore.sceneItems}
             sources={sourcesStore.sources}
             isHost={isHost}
-            isSyncing={sourcesStore.isMutating}
+            isSyncing={
+              sourcesStore.isMutating || Boolean(busyKey?.startsWith('screen'))
+            }
             onReorder={(from, to) => void sourcesStore.reorder(from, to)}
             onToggleVisibility={(sourceId, visible) =>
               void sourcesStore.setVisibility(sourceId, visible)
@@ -562,6 +661,11 @@ export function SourcesPanel({
             onSeek={(sourceId, positionMs) => sourcesStore.seek(sourceId, positionMs)}
             onVolumeChange={(sourceId, volume) => sourcesStore.setVolume(sourceId, volume)}
             onMutedChange={(sourceId, muted) => sourcesStore.setMuted(sourceId, muted)}
+            onStartScreenShare={(sourceId) => handleStartScreenShare(sourceId)}
+            onStopScreenShare={(sourceId) => handleStopScreenShare(sourceId)}
+            onToggleScreenSystemAudio={(sourceId, withAudio) =>
+              handleToggleScreenSystemAudio(sourceId, withAudio)
+            }
           />
         )}
       </div>

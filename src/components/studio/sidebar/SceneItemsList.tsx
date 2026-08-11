@@ -18,6 +18,9 @@ interface SceneItemsListProps {
   onSeek?: (sourceId: string, positionMs: number) => Promise<unknown>
   onVolumeChange?: (sourceId: string, volume: number) => Promise<unknown>
   onMutedChange?: (sourceId: string, muted: boolean) => Promise<unknown>
+  onStartScreenShare?: (sourceId: string) => Promise<unknown>
+  onStopScreenShare?: (sourceId: string) => Promise<unknown>
+  onToggleScreenSystemAudio?: (sourceId: string, withSystemAudio: boolean) => Promise<unknown>
 }
 
 export function SceneItemsList({
@@ -33,6 +36,9 @@ export function SceneItemsList({
   onSeek,
   onVolumeChange,
   onMutedChange,
+  onStartScreenShare,
+  onStopScreenShare,
+  onToggleScreenSystemAudio,
 }: SceneItemsListProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
@@ -87,7 +93,7 @@ export function SceneItemsList({
     <div className="space-y-1">
       {isHost && canSort && (
         <p className="px-0.5 text-[10px] text-muted-foreground">
-          Drag to reorder · eye toggles visibility · chevron opens video controls
+          Drag to reorder · eye toggles visibility · chevron opens playback / share controls
         </p>
       )}
 
@@ -124,6 +130,9 @@ export function SceneItemsList({
           onSeek={isHost ? onSeek : undefined}
           onVolumeChange={isHost ? onVolumeChange : undefined}
           onMutedChange={isHost ? onMutedChange : undefined}
+          onStartScreenShare={isHost ? onStartScreenShare : undefined}
+          onStopScreenShare={isHost ? onStopScreenShare : undefined}
+          onToggleScreenSystemAudio={isHost ? onToggleScreenSystemAudio : undefined}
         />
       ))}
     </div>

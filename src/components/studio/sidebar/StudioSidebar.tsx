@@ -60,7 +60,10 @@ interface StudioSidebarProps {
   sourcesStore?: SessionSourcesStore
   produceCameraSource?: (sourceId: string, deviceId: string) => Promise<{ producerId: string }>
   stopCameraSource?: (sourceId: string) => Promise<void>
-  produceScreenShare?: (sourceId: string) => Promise<{ producerId: string }>
+  produceScreenShare?: (
+    sourceId: string,
+    options?: { withSystemAudio?: boolean },
+  ) => Promise<{ producerId: string; audioProducerId?: string }>
   stopScreenShare?: (sourceId: string) => Promise<void>
   /** Host main webcam — used to disable duplicate Camera Source picks. */
   hostWebcamDeviceId?: string | null

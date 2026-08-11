@@ -11,9 +11,10 @@ import {
   Trash2,
 } from 'lucide-react'
 import { PrerecordedPlaybackControls } from '@/components/studio/sidebar/PrerecordedPlaybackControls'
+import { ScreenShareControls } from '@/components/studio/sidebar/ScreenShareControls'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { Source, SourceType } from '@/types/sources'
+import type { ScreenSourceSettings, Source, SourceType } from '@/types/sources'
 import { cn } from '@/lib/utils'
 
 const TYPE_ICON: Record<SourceType, typeof Camera> = {
@@ -61,6 +62,9 @@ interface SceneItemCardProps {
   onSeek?: (sourceId: string, positionMs: number) => Promise<unknown>
   onVolumeChange?: (sourceId: string, volume: number) => Promise<unknown>
   onMutedChange?: (sourceId: string, muted: boolean) => Promise<unknown>
+  onStartScreenShare?: (sourceId: string) => Promise<unknown>
+  onStopScreenShare?: (sourceId: string) => Promise<unknown>
+  onToggleScreenSystemAudio?: (sourceId: string, withSystemAudio: boolean) => Promise<unknown>
 }
 
 export function SceneItemCard({
@@ -80,6 +84,9 @@ export function SceneItemCard({
   onSeek,
   onVolumeChange,
   onMutedChange,
+  onStartScreenShare,
+  onStopScreenShare,
+  onToggleScreenSystemAudio,
 }: SceneItemCardProps) {
   const type = row.source?.type ?? 'camera'
   const Icon = TYPE_ICON[type] ?? Camera
@@ -92,10 +99,16 @@ export function SceneItemCard({
   const hostWebcamDuplicate =
     type === 'camera' && cameraSettings?.hostWebcamDuplicate === true
   const isPrerecorded = type === 'prerecorded' && Boolean(row.source)
+  const isScreen = type === 'screen' && Boolean(row.source)
   const canControlPlayback =
     isPrerecorded &&
     Boolean(onPlay && onPause && onSeek && onVolumeChange && onMutedChange)
+  const canControlScreen =
+    isScreen && Boolean(onStartScreenShare && onStopScreenShare)
+  const screenSettings = row.source?.settings as ScreenSourceSettings | undefined
+  const screenLive = Boolean(screenSettings?.producerId) && row.source?.state === 'ACTIVE'
   const [expanded, setExpanded] = useState(false)
+  const showExpand = canControlPlayback || canControlScreen
 
   return (
     <div
@@ -160,21 +173,27 @@ export function SceneItemCard({
               ? 'Device not available on this machine'
               : hostWebcamDuplicate
                 ? 'Covered by main webcam'
-                : row.visible
-                  ? `Order ${row.zIndex + 1}`
-                  : 'Hidden'}
+                : isScreen
+                  ? screenLive
+                    ? row.visible
+                      ? `Sharing · order ${row.zIndex + 1}`
+                      : 'Sharing · hidden'
+                    : 'Not sharing'
+                  : row.visible
+                    ? `Order ${row.zIndex + 1}`
+                    : 'Hidden'}
           </p>
         </div>
 
         <div className="flex shrink-0 gap-0.5" draggable={false}>
-          {canControlPlayback && (
+          {showExpand && (
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7"
               disabled={disabled}
               onClick={() => setExpanded((open) => !open)}
-              aria-label={expanded ? 'Hide playback controls' : 'Show playback controls'}
+              aria-label={expanded ? 'Hide controls' : 'Show controls'}
               aria-expanded={expanded}
             >
               <ChevronDown
@@ -221,6 +240,16 @@ export function SceneItemCard({
           onSeek={(positionMs) => onSeek!(row.sourceId, positionMs)}
           onVolumeChange={(volume) => onVolumeChange!(row.sourceId, volume)}
           onMutedChange={(muted) => onMutedChange!(row.sourceId, muted)}
+        />
+      )}
+
+      {expanded && canControlScreen && row.source && (
+        <ScreenShareControls
+          source={row.source}
+          disabled={disabled}
+          onStart={onStartScreenShare!}
+          onStop={onStopScreenShare!}
+          onToggleSystemAudio={onToggleScreenSystemAudio}
         />
       )}
     </div>
