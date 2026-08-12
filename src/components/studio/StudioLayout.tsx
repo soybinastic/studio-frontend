@@ -362,7 +362,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     activeSceneId: sceneStore.activeSceneId,
     sceneSourcesConfig: activeSceneSources,
     sessionSources: sources,
-    onSceneSourcesUpdated: sceneStore.patchActiveSceneSources,
+    onSceneSourcesUpdated: sceneStore.patchActiveSceneSourcesConfig,
   })
 
   const previewParticipants = useMemo(

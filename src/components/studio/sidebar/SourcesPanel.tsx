@@ -92,12 +92,18 @@ export function SourcesPanel({
   const [videos, setVideos] = useState<CmsVideo[]>([])
   const [videosPage, setVideosPage] = useState(1)
   const [videosCount, setVideosCount] = useState(0)
+  const [videosHasNext, setVideosHasNext] = useState(false)
   const [videosLoading, setVideosLoading] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [withSystemAudio, setWithSystemAudio] = useState(false)
 
   const pageSize = 12
-  const totalPages = Math.max(1, Math.ceil(videosCount / pageSize))
+  const totalPages = Math.max(
+    1,
+    Math.ceil(videosCount / pageSize),
+    videosHasNext ? videosPage + 1 : videosPage,
+  )
+  const showVideosPager = videosCount > pageSize || videosHasNext || videosPage > 1
 
   const attachedCameraKeys = useMemo(() => {
     const keys = new Set<string>()
@@ -174,11 +180,13 @@ export function SourcesPanel({
       const result = await listCmsVideos({ page, pageSize })
       setVideos(result.results ?? [])
       setVideosCount(result.count ?? 0)
-      setVideosPage(page)
+      setVideosHasNext(Boolean(result.next))
+      setVideosPage(result.page || page)
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Could not load CMS videos')
       setVideos([])
       setVideosCount(0)
+      setVideosHasNext(false)
     } finally {
       setVideosLoading(false)
     }
@@ -614,7 +622,7 @@ export function SourcesPanel({
                 </div>
               )}
 
-              {videosCount > pageSize && (
+              {showVideosPager && (
                 <div className="flex items-center justify-between pt-1">
                   <Button
                     type="button"
@@ -634,7 +642,7 @@ export function SourcesPanel({
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2"
-                    disabled={videosPage >= totalPages || videosLoading}
+                    disabled={(!videosHasNext && videosPage >= totalPages) || videosLoading}
                     onClick={() => void loadVideos(videosPage + 1)}
                   >
                     <ChevronRight className="h-3.5 w-3.5" />

@@ -29,7 +29,7 @@ interface UseTileOrderStoreOptions {
   sceneSourcesConfig: SceneSourcesConfig | undefined
   /** Session registry Sources (camera / screen / prerecorded / …). */
   sessionSources?: Source[]
-  onSceneSourcesUpdated?: (assignments: Record<string, string>) => void
+  onSceneSourcesUpdated?: (sources: SceneSourcesConfig) => void
 }
 
 export function useTileOrderStore({
@@ -291,8 +291,12 @@ export function useTileOrderStore({
           const updated = await updateScene(sessionId, activeSceneId, {
             sources: { assignments },
           })
-          onSceneSourcesUpdated?.(updated.sources.assignments ?? assignments)
-          void persistSceneSources(sessionId, activeSceneId, updated.sources.assignments ?? assignments)
+          onSceneSourcesUpdated?.(updated.sources)
+          void persistSceneSources(
+            sessionId,
+            activeSceneId,
+            updated.sources.assignments ?? assignments,
+          )
         } else {
           const session = await updateSessionTileConfig(sessionId, {
             tile_order_config: { assignments },

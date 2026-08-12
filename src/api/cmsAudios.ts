@@ -28,11 +28,45 @@ export interface CmsAudio {
   duration: string | null
 }
 
+/** Normalized list envelope (CMS CustomPagination → DRF-like fields). */
 export interface CmsAudioListResult {
   count: number
   next: string | null
   previous: string | null
+  page: number
+  pageSize: number
   results: CmsAudio[]
+}
+
+interface CmsPaginatedAudioResponse {
+  count?: number
+  total?: number
+  next?: string | null
+  previous?: string | null
+  page?: number
+  page_size?: number
+  links?: {
+    next?: string | null
+    previous?: string | null
+  }
+  results?: CmsAudio[]
+}
+
+function normalizeCmsAudioList(
+  raw: CmsPaginatedAudioResponse,
+  fallbackPage: number,
+  fallbackPageSize: number,
+): CmsAudioListResult {
+  const results = Array.isArray(raw.results) ? raw.results : []
+  const count = Number(raw.total ?? raw.count ?? results.length) || 0
+  return {
+    count,
+    next: raw.links?.next ?? raw.next ?? null,
+    previous: raw.links?.previous ?? raw.previous ?? null,
+    page: Number(raw.page ?? fallbackPage) || fallbackPage,
+    pageSize: Number(raw.page_size ?? fallbackPageSize) || fallbackPageSize,
+    results,
+  }
 }
 
 export async function listCmsAudios(params?: {
@@ -66,5 +100,6 @@ export async function listCmsAudios(params?: {
     throw new ApiError(response.status, await parseCmsError(response))
   }
 
-  return response.json() as Promise<CmsAudioListResult>
+  const raw = (await response.json()) as CmsPaginatedAudioResponse
+  return normalizeCmsAudioList(raw, page, pageSize)
 }
