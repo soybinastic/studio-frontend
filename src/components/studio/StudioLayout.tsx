@@ -14,12 +14,13 @@ import { SceneDevicePickerModal } from '@/components/studio/scenes/SceneDevicePi
 import { DeviceSetupModal } from '@/components/studio/device-setup/DeviceSetupModal'
 import { YouTubeGoLiveErrorDialog } from '@/components/studio/YouTubeGoLiveErrorDialog'
 import { useDeviceStore } from '@/hooks/useDeviceStore'
-import { hasSceneDevices } from '@/lib/devices'
+import { hasSceneDevices, resolvePreferredSetupDevices } from '@/lib/devices'
 import { countdownSecondsRemaining } from '@/lib/countdown'
 import { useRoom } from '@/hooks/useRoom'
 import { useBackendSync } from '@/hooks/useBackendSync'
 import { useOutputStore } from '@/hooks/useOutputStore'
 import { useTileOrderStore } from '@/hooks/useTileOrderStore'
+import { useSessionSourcesStore } from '@/hooks/useSessionSourcesStore'
 import { useGraphicsStore } from '@/hooks/useGraphicsStore'
 import { useBackgroundMusicStore } from '@/hooks/useBackgroundMusicStore'
 import { useSceneStore } from '@/hooks/useSceneStore'
@@ -31,6 +32,7 @@ import { isStudioChatEnabled } from '@/lib/studioChatEnv'
 import { useCmsEmbedBridge } from '@/context/CmsEmbedBridgeProvider'
 import { useStudioHeaderControls } from '@/context/StudioHeaderControlsProvider'
 import { hydrateCompositorFromPersistence } from '@/lib/hydrateFromPersistence'
+import { restoreSessionSources } from '@/lib/restoreSessionSources'
 import { applyActiveScenePreviewState } from '@/lib/applyActiveScenePreview'
 import { isPersistenceEnabled } from '@/lib/tenantEnv'
 import {
@@ -38,6 +40,7 @@ import {
   getLocalTenantConfiguration,
   persistDestinationsFromStream,
   persistLayout,
+  persistSceneLayout,
   persistGraphics,
   setPersistenceSessionId,
 } from '@/lib/persistenceSync'
@@ -126,6 +129,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     scenes: sceneStore.scenes,
     onSceneUpdated: sceneStore.patchScene,
   })
+  const preferredSetupDevices = useMemo(
+    () =>
+      resolvePreferredSetupDevices(
+        sceneStore.scenes,
+        getLocalTenantConfiguration()?.devices ?? configuration?.devices ?? null,
+      ),
+    [sceneStore.scenes, configuration?.devices],
+  )
   const prevCountdownActive = useRef(false)
   const hydrationStartedRef = useRef(false)
 
@@ -156,7 +167,9 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           outputStore,
           graphicsStore,
           backgroundMusicStore,
-          applyDevicePreferences: false,
+          deviceStore,
+          tenantDevices: config.devices,
+          applyDevicePreferences: true,
         })
         await graphicsStore.refresh({ force: true })
       } catch (err) {
@@ -180,10 +193,16 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     error,
     micEnabled,
     webcamEnabled,
+    isPublished,
     toggleMic,
     toggleWebcam,
     publishProducers,
     switchDevices,
+    produceCameraSource,
+    stopCameraSource,
+    produceScreenShare,
+    stopScreenShare,
+    setSourceStoppedListener,
     leave,
   } = useRoom({
     roomId: context.roomId,
@@ -242,6 +261,97 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     [sceneStore.scenes],
   )
 
+  const sessionSourcesStore = useSessionSourcesStore({
+    sessionId,
+    isHost: context.isHost,
+    activeSceneId: sceneStore.activeSceneId,
+    sceneSourcesConfig: activeSceneSources,
+    onSceneSourcesUpdated: sceneStore.patchActiveSceneSourcesConfig,
+  })
+
+  const { sources, replaceSources, play } = sessionSourcesStore
+
+  // Stabilize restore effect deps (store object identity changes each render).
+  const replaceSourcesRef = useRef(replaceSources)
+  replaceSourcesRef.current = replaceSources
+  const playSourceRef = useRef(play)
+  playSourceRef.current = play
+  const sceneRefreshRef = useRef(sceneStore.refresh)
+  sceneRefreshRef.current = sceneStore.refresh
+
+  // Browser "Stop sharing" / track ended → clear screen source producer ids.
+  const sessionSourcesStoreRef = useRef(sessionSourcesStore)
+  sessionSourcesStoreRef.current = sessionSourcesStore
+  useEffect(() => {
+    if (!context.isHost) {
+      setSourceStoppedListener(null)
+      return
+    }
+    setSourceStoppedListener((sourceId) => {
+      const store = sessionSourcesStoreRef.current
+      const source = store.sourceById.get(sourceId)
+      if (!source || source.type !== 'screen') return
+      const settings = {
+        ...(source.settings as Record<string, unknown>),
+        // null clears keys on the compositor PATCH (merge treats null as delete).
+        producerId: null,
+        audioProducerId: null,
+      }
+      void store.update(sourceId, { settings, state: 'STOPPED' })
+    })
+    return () => setSourceStoppedListener(null)
+  }, [context.isHost, setSourceStoppedListener])
+
+  const sourcesRestoredRef = useRef(false)
+
+  useEffect(() => {
+    if (!context.isHost || !roomEnabled || connectionState !== 'connected' || !isPublished) {
+      return
+    }
+    if (sourcesRestoredRef.current) return
+    sourcesRestoredRef.current = true
+
+    void (async () => {
+      try {
+        const result = await restoreSessionSources({
+          sessionId,
+          peerId: context.peerId,
+          hostWebcam: {
+            deviceId: deviceStore.selection.cameraId,
+            label: deviceStore.selection.cameraLabel,
+          },
+          produceCameraSource,
+          playSource: (sourceId) => playSourceRef.current(sourceId),
+        })
+        replaceSourcesRef.current(result.sources)
+        await sceneRefreshRef.current()
+        if (result.skippedHostWebcamDuplicates.length > 0) {
+          toast.message(
+            `Skipped Camera Source matching main webcam: ${result.skippedHostWebcamDuplicates.join(', ')}`,
+          )
+        }
+        if (result.unavailableCameraLabels.length > 0) {
+          toast.message(
+            `Camera not available: ${result.unavailableCameraLabels.join(', ')}`,
+          )
+        }
+      } catch (err) {
+        sourcesRestoredRef.current = false
+        console.warn('[sources] restore after hydrate failed', err)
+      }
+    })()
+  }, [
+    context.isHost,
+    context.peerId,
+    roomEnabled,
+    connectionState,
+    isPublished,
+    sessionId,
+    produceCameraSource,
+    deviceStore.selection.cameraId,
+    deviceStore.selection.cameraLabel,
+  ])
+
   const tileOrder = useTileOrderStore({
     sessionId,
     isHost: context.isHost,
@@ -251,7 +361,8 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     roomId: context.roomId,
     activeSceneId: sceneStore.activeSceneId,
     sceneSourcesConfig: activeSceneSources,
-    onSceneSourcesUpdated: sceneStore.patchActiveSceneSources,
+    sessionSources: sources,
+    onSceneSourcesUpdated: sceneStore.patchActiveSceneSourcesConfig,
   })
 
   const previewParticipants = useMemo(
@@ -305,9 +416,16 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
       outputStore.setLayout(layout)
       await backendSync.syncLayout(layout)
       void persistLayout(layout)
+      if (sceneStore.activeSceneId) {
+        void persistSceneLayout(sessionId, sceneStore.activeSceneId, layout)
+        const active = sceneStore.scenes.find((scene) => scene.scene_id === sceneStore.activeSceneId)
+        if (active) {
+          sceneStore.patchScene({ ...active, layout })
+        }
+      }
       toast.success(`Layout: ${layout}`)
     },
-    [outputStore, backendSync],
+    [outputStore, backendSync, sceneStore, sessionId],
   )
 
   const handleActivateScene = useCallback(
@@ -691,12 +809,14 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
         deviceStore={deviceStore}
         open={showDeviceSetup}
         onConfirm={handleDeviceConfirm}
+        preferredDevices={preferredSetupDevices}
       />
 
       <SceneDevicePickerModal
         open={showSceneDevicePicker}
         onConfirm={(selection) => void handleSceneDevicesConfirm(selection)}
         onCancel={() => setShowSceneDevicePicker(false)}
+        preferredDevices={deviceStore.selection}
       />
 
       <AddSceneModal
@@ -799,10 +919,23 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
           onPin={tileOrder.togglePin}
           onHide={(sourceId) => void tileOrder.toggleHide(sourceId)}
           onMute={() => void toggleMic()}
-          isSyncing={graphicsStore.isSyncing || tileOrder.isSyncing || backgroundMusicStore.isMutating}
+          isSyncing={
+            graphicsStore.isSyncing ||
+            tileOrder.isSyncing ||
+            backgroundMusicStore.isMutating ||
+            sessionSourcesStore.isMutating
+          }
           drawerOpen={controlsDrawerOpen}
           onDrawerOpenChange={setControlsDrawerOpen}
           sessionId={sessionId}
+          activeSceneId={sceneStore.activeSceneId}
+          sourcesStore={sessionSourcesStore}
+          produceCameraSource={produceCameraSource}
+          stopCameraSource={stopCameraSource}
+          produceScreenShare={produceScreenShare}
+          stopScreenShare={stopScreenShare}
+          hostWebcamDeviceId={deviceStore.selection.cameraId}
+          hostWebcamLabel={deviceStore.selection.cameraLabel}
           currentUserId={context.peerId}
           hostPeerId={hostPeerId}
           participants={participants}

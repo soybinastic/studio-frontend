@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
+import { Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { PreviewVideoFit } from '@/lib/layouts'
 import type { StudioParticipant } from '@/types/participants'
@@ -26,6 +27,8 @@ export function PreviewParticipant({
     .join('')
     .slice(0, 2)
     .toUpperCase()
+  const showLiveVideo = Boolean(participant.videoTrack && participant.videoEnabled)
+  const isIdleScreen = participant.sourceKind === 'screen' && !showLiveVideo
 
   useEffect(() => {
     const video = videoRef.current
@@ -58,7 +61,7 @@ export function PreviewParticipant({
       )}
       style={style}
     >
-      {participant.videoTrack && participant.videoEnabled ? (
+      {showLiveVideo ? (
         <video
           ref={videoRef}
           autoPlay
@@ -69,10 +72,18 @@ export function PreviewParticipant({
       ) : (
         <div className="flex h-full items-center justify-center bg-zinc-800">
           <div className="flex max-w-full flex-col items-center gap-1.5 px-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-700">
-              <span className="text-lg font-semibold text-zinc-200">{initials || '?'}</span>
-            </div>
-            <span className="max-w-full truncate text-[10px] text-zinc-400">{displayName}</span>
+            {isIdleScreen ? (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-700">
+                <Monitor className="h-5 w-5 text-zinc-300" aria-hidden />
+              </div>
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-700">
+                <span className="text-lg font-semibold text-zinc-200">{initials || '?'}</span>
+              </div>
+            )}
+            <span className="max-w-full truncate text-[10px] text-zinc-400">
+              {isIdleScreen ? 'Not sharing' : displayName}
+            </span>
           </div>
         </div>
       )}

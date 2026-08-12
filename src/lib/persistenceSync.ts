@@ -103,6 +103,16 @@ export async function persistLayout(layout: LayoutType): Promise<void> {
   await persistConfiguration({ layout })
 }
 
+/** Persist layout on the active camera scene (not only tenant default). */
+export async function persistSceneLayout(
+  sessionId: string,
+  compositorSceneId: string | null | undefined,
+  layout: LayoutType,
+): Promise<void> {
+  if (!compositorSceneId) return
+  await persistSceneUpdate(sessionId, compositorSceneId, { layout })
+}
+
 export async function persistGraphics(
   graphics_config: Partial<GraphicsState>,
   sessionId?: string | null,
@@ -262,10 +272,18 @@ export async function persistSceneDelete(
 export async function persistSceneSources(
   sessionId: string,
   compositorSceneId: string,
-  assignments: Record<string, string>,
+  sources: Record<string, string> | NonNullable<UpdateSceneRequest['sources']>,
 ): Promise<void> {
+  // Tile-order callers pass a slot→sourceId map; Sources panel passes full config.
+  const payload: NonNullable<UpdateSceneRequest['sources']> =
+    sources &&
+    typeof sources === 'object' &&
+    ('version' in sources || 'items' in sources)
+      ? sources
+      : { assignments: sources as Record<string, string> }
+
   await persistSceneUpdate(sessionId, compositorSceneId, {
-    sources: { assignments },
+    sources: payload,
   })
 }
 

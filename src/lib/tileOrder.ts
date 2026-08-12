@@ -1,12 +1,10 @@
+import type { SceneSourcesConfig } from '@/types/sources'
+
+export type { SceneSourcesConfig }
+
 export interface TileOrderConfig {
   version: number
   assignments: Record<string, string>
-}
-
-export interface SceneSourcesConfig {
-  version: number
-  sources: unknown[]
-  assignments?: Record<string, string>
 }
 
 export function resolveEffectiveAssignments(

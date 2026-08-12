@@ -1,14 +1,14 @@
-import { ApiError } from '@/api/client'
+import { ApiError, formatApiErrorMessage } from '@/api/client'
 
 const PERSISTENCE_API_BASE =
   import.meta.env.VITE_PERSISTENCE_API_URL ?? 'http://localhost:8001/api/persistence'
 
 async function parseError(response: Response): Promise<string> {
   try {
-    const data = (await response.json()) as { detail?: string }
-    return data.detail ?? response.statusText
+    const data: unknown = await response.json()
+    return formatApiErrorMessage(data, response.status, response.statusText)
   } catch {
-    return response.statusText
+    return response.statusText.trim() || `Request failed (${response.status})`
   }
 }
 

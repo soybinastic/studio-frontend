@@ -1,14 +1,11 @@
 import type { DeviceSelection } from '@/types/devices'
 import type { GraphicsState } from '@/types/graphics'
 import type { LayoutType } from '@/types/session'
+import type { SceneItem, SceneSourcesConfig } from '@/types/sources'
+
+export type { SceneItem, SceneSourcesConfig } from '@/types/sources'
 
 export type SceneType = 'CAMERA' | 'COUNTDOWN'
-
-export interface SceneSourcesConfig {
-  version: 1
-  sources: unknown[]
-  assignments?: Record<string, string>
-}
 
 export interface BackgroundMusicTrack {
   asset_id: string
@@ -89,7 +86,10 @@ export interface UpdateSceneRequest {
   graphics_config?: Partial<GraphicsState>
   devices?: Partial<DeviceSelection>
   sources?: {
+    version?: 1 | 2
+    items?: SceneItem[]
     assignments?: Record<string, string>
+    sources?: unknown[]
   }
   background_music?: Partial<BackgroundMusicConfig>
 }

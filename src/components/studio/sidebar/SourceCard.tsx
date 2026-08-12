@@ -1,5 +1,5 @@
 import type { SourceType } from '@/types/participants'
-import { Camera, Monitor, Film, Radio, Globe, Image, Music, FileText, Library, AppWindow, Tv } from 'lucide-react'
+import { Camera, Monitor, Film, Radio, Image, Music, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const SOURCE_TYPES: SourceType[] = [
@@ -7,14 +7,9 @@ export const SOURCE_TYPES: SourceType[] = [
   { id: 'screen', label: 'Screen Share', icon: 'monitor', enabled: true, category: 'screen' },
   { id: 'prerecorded', label: 'Pre-recorded Video', icon: 'film', enabled: true, category: 'media' },
   { id: 'rtmp', label: 'RTMP', icon: 'radio', enabled: false, category: 'external' },
-  { id: 'browser', label: 'Browser Source', icon: 'globe', enabled: false, category: 'external' },
   { id: 'image', label: 'Image', icon: 'image', enabled: false, category: 'media' },
-  { id: 'video', label: 'Video', icon: 'film', enabled: false, category: 'media' },
   { id: 'audio', label: 'Audio', icon: 'music', enabled: false, category: 'media' },
   { id: 'pdf', label: 'PDF', icon: 'file', enabled: false, category: 'media' },
-  { id: 'hls', label: 'HLS', icon: 'tv', enabled: false, category: 'external' },
-  { id: 'media-library', label: 'Media Library', icon: 'library', enabled: false, category: 'media' },
-  { id: 'window', label: 'Window Capture', icon: 'window', enabled: false, category: 'screen' },
 ]
 
 const ICON_MAP: Record<string, typeof Camera> = {
@@ -22,13 +17,9 @@ const ICON_MAP: Record<string, typeof Camera> = {
   monitor: Monitor,
   film: Film,
   radio: Radio,
-  globe: Globe,
   image: Image,
   music: Music,
   file: FileText,
-  tv: Tv,
-  library: Library,
-  window: AppWindow,
 }
 
 interface SourceCardProps {

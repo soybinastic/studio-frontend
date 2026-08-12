@@ -157,4 +157,9 @@ export interface ParticipantMedia {
   audioEnabled: boolean
   videoEnabled: boolean
   isLocal: boolean
+  /**
+   * When set, this entry is a Studio Source feed (camera / screen / …),
+   * not the peer's primary webcam. `peerId` equals `sourceId` for lookup.
+   */
+  sourceId?: string
 }

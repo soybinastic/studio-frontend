@@ -114,6 +114,15 @@ export function SourceTileCard({
           {source.kind === 'rtmp' && (
             <Badge variant="outline" className="px-1 py-0 text-[9px]">RTMP</Badge>
           )}
+          {source.kind === 'camera' && (
+            <Badge variant="outline" className="px-1 py-0 text-[9px]">Camera</Badge>
+          )}
+          {source.kind === 'screen' && (
+            <Badge variant="outline" className="px-1 py-0 text-[9px]">Screen</Badge>
+          )}
+          {source.kind === 'prerecorded' && (
+            <Badge variant="outline" className="px-1 py-0 text-[9px]">Video</Badge>
+          )}
           {source.isLocal && (
             <Badge variant="outline" className="px-1 py-0 text-[9px]">You</Badge>
           )}

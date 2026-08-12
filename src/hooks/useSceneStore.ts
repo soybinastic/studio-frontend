@@ -261,6 +261,19 @@ export function useSceneStore(
     )
   }, [])
 
+  const patchActiveSceneSourcesConfig = useCallback((config: Scene['sources']) => {
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.is_active
+          ? {
+              ...scene,
+              sources: config,
+            }
+          : scene,
+      ),
+    )
+  }, [])
+
   const patchScene = useCallback((updated: Scene) => {
     setScenes((prev) => prev.map((scene) => (scene.scene_id === updated.scene_id ? updated : scene)))
   }, [])
@@ -279,6 +292,7 @@ export function useSceneStore(
     removeScene,
     activateScene,
     patchActiveSceneSources,
+    patchActiveSceneSourcesConfig,
     patchScene,
   }
 }

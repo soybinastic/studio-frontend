@@ -126,6 +126,21 @@ export async function openVideoStream(
   return stream
 }
 
+export interface OpenDisplayMediaOptions {
+  /** Request system/tab audio when the browser supports it. */
+  audio?: boolean
+}
+
+/** Open a screen/window/tab capture stream via getDisplayMedia. */
+export async function openDisplayMediaStream(
+  options?: OpenDisplayMediaOptions,
+): Promise<MediaStream> {
+  return navigator.mediaDevices.getDisplayMedia({
+    video: true,
+    audio: options?.audio ?? false,
+  })
+}
+
 export async function openAudioStream(
   deviceId?: string | null,
   mode: 'preview' | 'producer' = 'preview',

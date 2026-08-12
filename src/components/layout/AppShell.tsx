@@ -8,28 +8,33 @@ import { useDestinationOutputs } from '@/context/DestinationOutputsProvider'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { isEmbeddedIntegration } from '@/lib/integration/integrationMode'
+import broadcastStudioLogo from '@/assets/broadcast-studio-logo.png'
 
 function StudioBrand({ embedded }: { embedded: boolean }) {
   const content = (
-    <>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <Radio className="h-4 w-4" />
-      </span>
-      <span className="hidden truncate sm:inline">Mini Streaming Studio</span>
-      <span className="truncate sm:hidden">Studio</span>
-    </>
+    <span className="inline-flex items-center rounded-md bg-black px-2 py-1">
+      <img
+        src={broadcastStudioLogo}
+        alt="Broadcast Studio"
+        className="h-6 w-auto max-w-[min(100%,13rem)] object-contain object-left sm:h-7 sm:max-w-[15rem]"
+      />
+    </span>
   )
 
   if (embedded) {
     return (
-      <div className="flex min-w-0 shrink items-center gap-2 font-semibold tracking-tight">
+      <div className="flex min-w-0 shrink items-center" aria-label="Broadcast Studio">
         {content}
       </div>
     )
   }
 
   return (
-    <Link to="/" className="flex min-w-0 shrink items-center gap-2 font-semibold tracking-tight">
+    <Link
+      to="/"
+      className="flex min-w-0 shrink items-center"
+      aria-label="Broadcast Studio"
+    >
       {content}
     </Link>
   )

@@ -6,6 +6,7 @@ import {
   type MediaDeviceInfo,
 } from '@/types/devices'
 import { mapMediaDevices } from '@/lib/devices'
+import { hasSceneDevices, normalizeDeviceSelection } from '@/lib/devices'
 import { resolveSelectionDevices, selectionFromMediaDevice } from '@/lib/resolveDevice'
 import { mediaErrorMessage, openAvPreviewStream, stopMediaStream } from '@/lib/openMediaStream'
 
@@ -62,45 +63,61 @@ export function useDeviceStore() {
   /**
    * Request camera/mic permission first, then enumerate.
    * Browsers hide device IDs and labels until getUserMedia succeeds.
+   * Optional preferred selection (active scene / tenant) is matched by id then label.
    */
-  const initializeDevices = useCallback(async (): Promise<DeviceSelection | null> => {
-    dispatch({ isEnumerating: true })
-    setPermissionError(null)
+  const initializeDevices = useCallback(
+    async (preferred?: DeviceSelection | null): Promise<DeviceSelection | null> => {
+      dispatch({ isEnumerating: true })
+      setPermissionError(null)
 
-    try {
-      const permissionStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
-      })
-      permissionStream.getTracks().forEach((t) => t.stop())
+      const preferredSelection =
+        preferred && hasSceneDevices(preferred) ? normalizeDeviceSelection(preferred) : null
 
-      const devices = await enumerateDevices()
-      return applyDeviceList(devices)
-    } catch {
+      const finish = (devices: MediaDeviceInfo[]) =>
+        applyDeviceList(devices, preferredSelection ?? selectionRef.current)
+
       try {
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-        fallbackStream.getTracks().forEach((t) => t.stop())
+        const permissionStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: true,
+        })
+        permissionStream.getTracks().forEach((t) => t.stop())
+
         const devices = await enumerateDevices()
-        return applyDeviceList(devices)
+        return finish(devices)
       } catch {
         try {
-          const fallbackStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true })
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          })
           fallbackStream.getTracks().forEach((t) => t.stop())
           const devices = await enumerateDevices()
-          return applyDeviceList(devices)
-        } catch (innerErr) {
-          const msg =
-            innerErr instanceof DOMException && innerErr.name === 'NotAllowedError'
-              ? 'Camera and microphone access was denied. Allow permissions in your browser settings.'
-              : 'Could not access media devices.'
-          setPermissionError(msg)
-          return null
+          return finish(devices)
+        } catch {
+          try {
+            const fallbackStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: true,
+            })
+            fallbackStream.getTracks().forEach((t) => t.stop())
+            const devices = await enumerateDevices()
+            return finish(devices)
+          } catch (innerErr) {
+            const msg =
+              innerErr instanceof DOMException && innerErr.name === 'NotAllowedError'
+                ? 'Camera and microphone access was denied. Allow permissions in your browser settings.'
+                : 'Could not access media devices.'
+            setPermissionError(msg)
+            return null
+          }
         }
+      } finally {
+        dispatch({ isEnumerating: false })
       }
-    } finally {
-      dispatch({ isEnumerating: false })
-    }
-  }, [enumerateDevices, applyDeviceList])
+    },
+    [enumerateDevices, applyDeviceList],
+  )
 
   const stopPreview = useCallback(() => {
     stopMediaStream(previewStreamRef.current)

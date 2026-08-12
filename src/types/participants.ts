@@ -2,7 +2,7 @@ import type { ConnectionState, ParticipantMedia } from '@/types/session'
 
 export interface StudioTileSource {
   sourceId: string
-  kind: 'participant' | 'rtmp'
+  kind: 'participant' | 'rtmp' | 'camera' | 'screen' | 'prerecorded'
   displayName: string
   slotIndex: number
   isHost: boolean
@@ -26,6 +26,8 @@ export interface StudioParticipant extends ParticipantMedia {
   isSpeaking: boolean
   connectionStatus: ConnectionState
   avatarUrl?: string
+  /** Studio source kind when this tile is a session source (camera/screen/…). */
+  sourceKind?: StudioTileSource['kind']
 }
 
 export function tileSourceToStudioParticipant(source: StudioTileSource): StudioParticipant {
@@ -43,6 +45,7 @@ export function tileSourceToStudioParticipant(source: StudioTileSource): StudioP
     isHidden: source.isHidden,
     isSpeaking: source.isSpeaking,
     connectionStatus: source.connectionStatus ?? 'connected',
+    sourceKind: source.kind,
   }
 }
 

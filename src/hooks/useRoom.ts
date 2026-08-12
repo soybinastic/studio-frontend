@@ -22,6 +22,7 @@ export function useRoom({
 }: UseRoomOptions) {
   const clientRef = useRef<RoomClient | null>(null)
   const connectionStateRef = useRef<ConnectionState>('idle')
+  const sourceStoppedListenerRef = useRef<((sourceId: string) => void) | null>(null)
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle')
   const [participants, setParticipants] = useState<ParticipantMedia[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +55,42 @@ export function useRoom({
     return client.replaceDevices(selection)
   }, [])
 
+  const produceCameraSource = useCallback(
+    async (sourceId: string, deviceId: string): Promise<{ producerId: string }> => {
+      const client = clientRef.current
+      if (!client) throw new Error('Room not connected')
+      return client.produceCameraSource(sourceId, deviceId)
+    },
+    [],
+  )
+
+  const stopCameraSource = useCallback(async (sourceId: string): Promise<void> => {
+    await clientRef.current?.stopCameraSource(sourceId)
+  }, [])
+
+  const produceScreenShare = useCallback(
+    async (
+      sourceId: string,
+      options?: { withSystemAudio?: boolean },
+    ): Promise<{ producerId: string; audioProducerId?: string }> => {
+      const client = clientRef.current
+      if (!client) throw new Error('Room not connected')
+      return client.produceScreenShare(sourceId, options)
+    },
+    [],
+  )
+
+  const stopScreenShare = useCallback(async (sourceId: string): Promise<void> => {
+    await clientRef.current?.stopScreenShare(sourceId)
+  }, [])
+
+  const setSourceStoppedListener = useCallback(
+    (listener: ((sourceId: string) => void) | null) => {
+      sourceStoppedListenerRef.current = listener
+    },
+    [],
+  )
+
   useEffect(() => {
     if (!enabled || !roomId || !peerId || !displayName || !mediasoupWsUrl) {
       return
@@ -66,6 +103,9 @@ export function useRoom({
       displayName,
       mediasoupWsUrl,
       autoPublish,
+      onSourceStopped: (sourceId) => {
+        sourceStoppedListenerRef.current?.(sourceId)
+      },
       onStateChange: (state) => {
         if (!cancelled) {
           connectionStateRef.current = state
@@ -107,7 +147,7 @@ export function useRoom({
     }
   }, [enabled, roomId, peerId, displayName, mediasoupWsUrl, autoPublish])
 
-  const localParticipant = participants.find((p) => p.isLocal)
+  const localParticipant = participants.find((p) => p.isLocal && !p.sourceId)
   const micEnabled = localParticipant?.audioEnabled ?? false
   const webcamEnabled = localParticipant?.videoEnabled ?? false
 
@@ -122,6 +162,11 @@ export function useRoom({
     toggleWebcam,
     publishProducers,
     switchDevices,
+    produceCameraSource,
+    stopCameraSource,
+    produceScreenShare,
+    stopScreenShare,
+    setSourceStoppedListener,
     leave,
   }
 }

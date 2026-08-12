@@ -7,12 +7,16 @@ import { ApiError } from '@/api/client'
 import { assignmentsFromOrder, reorderSourceIds, resolveEffectiveAssignments, resolveSourceOrder } from '@/lib/tileOrder'
 import { isCompositorPeer } from '@/lib/participants'
 import { persistSceneSources, persistTileOrder } from '@/lib/persistenceSync'
+import { getVisibleAttachedSourceIds, isCameraSourceAvailable } from '@/lib/sourceCatalog'
 import type { SceneSourcesConfig } from '@/types/scenes'
 import type { StudioTileSource } from '@/types/participants'
+import type { Source } from '@/types/sources'
 import type { ConnectionState, ParticipantMedia } from '@/types/session'
 
 const TILE_CONFIG_POLL_MS = 4000
 const RTMP_POLL_MS = 5000
+
+const HOST_OWNED_SOURCE_KINDS = new Set(['camera', 'screen', 'prerecorded', 'rtmp'])
 
 interface UseTileOrderStoreOptions {
   sessionId: string
@@ -23,7 +27,9 @@ interface UseTileOrderStoreOptions {
   roomId?: string
   activeSceneId: string | null
   sceneSourcesConfig: SceneSourcesConfig | undefined
-  onSceneSourcesUpdated?: (assignments: Record<string, string>) => void
+  /** Session registry Sources (camera / screen / prerecorded / …). */
+  sessionSources?: Source[]
+  onSceneSourcesUpdated?: (sources: SceneSourcesConfig) => void
 }
 
 export function useTileOrderStore({
@@ -35,6 +41,7 @@ export function useTileOrderStore({
   roomId,
   activeSceneId,
   sceneSourcesConfig,
+  sessionSources = [],
   onSceneSourcesUpdated,
 }: UseTileOrderStoreOptions) {
   const [sessionHostPeerId, setSessionHostPeerId] = useState<string | null>(null)
@@ -99,14 +106,27 @@ export function useTileOrderStore({
 
   const effectiveHostPeerId = sessionHostPeerId ?? hostPeerId
   const hiddenSet = useMemo(() => new Set(hiddenSourceIds), [hiddenSourceIds])
-  const hostOwnedSourceIds = useMemo(
-    () => new Set(rtmpSources.map((source) => source.source_id)),
-    [rtmpSources],
-  )
+
+  const sessionSourceById = useMemo(() => {
+    const map = new Map<string, Source>()
+    for (const source of sessionSources) map.set(source.id, source)
+    return map
+  }, [sessionSources])
+
+  const hostOwnedSourceIds = useMemo(() => {
+    const ids = new Set(rtmpSources.map((source) => source.source_id))
+    for (const source of sessionSources) {
+      if (HOST_OWNED_SOURCE_KINDS.has(source.type)) {
+        ids.add(source.id)
+      }
+    }
+    return ids
+  }, [rtmpSources, sessionSources])
 
   const participantById = useMemo(() => {
     const map = new Map<string, ParticipantMedia>()
     for (const participant of participants) {
+      if (participant.sourceId) continue
       if (isCompositorPeer(participant.peerId, { roomId, displayName: participant.displayName })) {
         continue
       }
@@ -115,12 +135,38 @@ export function useTileOrderStore({
     return map
   }, [participants, roomId])
 
+  /** Tracks for Studio Sources (local producers or remote consumers), keyed by sourceId. */
+  const sourceMediaById = useMemo(() => {
+    const map = new Map<string, ParticipantMedia>()
+    for (const participant of participants) {
+      if (!participant.sourceId) continue
+      map.set(participant.sourceId, participant)
+    }
+    return map
+  }, [participants])
+
+  const attachedSessionSourceIds = useMemo(() => {
+    // Only visible SceneItems participate in the preview layout.
+    return getVisibleAttachedSourceIds(sceneSourcesConfig)
+  }, [sceneSourcesConfig])
+
   const activeSourceIds = useMemo(() => {
     const ids: string[] = []
     for (const peerId of participantById.keys()) ids.push(peerId)
     for (const source of rtmpSources) ids.push(source.source_id)
+    for (const source of sessionSources) {
+      if (
+        (source.type === 'camera' || source.type === 'screen' || source.type === 'prerecorded') &&
+        attachedSessionSourceIds.has(source.id)
+      ) {
+        if (source.type === 'camera' && !isCameraSourceAvailable(source)) continue
+        // Screen stays in layout while on-scene + visible even without a live track
+        // (Wave C idle placeholder). Hide uses attachedSessionSourceIds; detach removes it.
+        ids.push(source.id)
+      }
+    }
     return ids
-  }, [participantById, rtmpSources])
+  }, [participantById, rtmpSources, sessionSources, attachedSessionSourceIds, sourceMediaById])
 
   const effectiveAssignments = useMemo(() => {
     if (assignmentOverride !== null) {
@@ -140,17 +186,17 @@ export function useTileOrderStore({
     [activeSourceIds, effectiveHostPeerId, effectiveAssignments, hiddenSet, hostOwnedSourceIds],
   )
 
-  const allTileSources = useMemo<StudioTileSource[]>(() => {
-    const orderedVisible = orderedSourceIds.map((sourceId, slotIndex) => {
+  const buildTile = useCallback(
+    (sourceId: string, slotIndex: number, isHidden: boolean): StudioTileSource | null => {
       const participant = participantById.get(sourceId)
       if (participant) {
         return {
           sourceId,
-          kind: 'participant' as const,
+          kind: 'participant',
           displayName: participant.displayName,
           slotIndex,
           isHost: sourceId === effectiveHostPeerId,
-          isHidden: false,
+          isHidden,
           isPinned: pinnedIds.has(sourceId),
           isSpeaking: false,
           isLocal: participant.isLocal,
@@ -164,69 +210,72 @@ export function useTileOrderStore({
         }
       }
 
+      const sessionSource = sessionSourceById.get(sourceId)
+      if (sessionSource) {
+        const kind =
+          sessionSource.type === 'camera' ||
+          sessionSource.type === 'screen' ||
+          sessionSource.type === 'prerecorded'
+            ? sessionSource.type
+            : 'rtmp'
+        const media = sourceMediaById.get(sourceId)
+        return {
+          sourceId,
+          kind,
+          displayName: sessionSource.name || sourceId,
+          slotIndex,
+          isHost: true,
+          isHidden,
+          isPinned: pinnedIds.has(sourceId),
+          isSpeaking: false,
+          isLocal: media?.isLocal,
+          videoEnabled: Boolean(media?.videoTrack),
+          audioEnabled: Boolean(media?.audioTrack),
+          videoTrack: media?.videoTrack,
+          audioTrack: media?.audioTrack,
+        }
+      }
+
       const rtmp = rtmpSources.find((source) => source.source_id === sourceId)
+      if (!rtmp) {
+        // Orphan id (deleted/detached source still lingering in assignments) — skip tile.
+        return null
+      }
       return {
         sourceId,
-        kind: 'rtmp' as const,
-        displayName: rtmp?.display_name || sourceId,
+        kind: 'rtmp',
+        displayName: rtmp.display_name || sourceId,
         slotIndex,
         isHost: false,
-        isHidden: false,
+        isHidden,
         isPinned: pinnedIds.has(sourceId),
         isSpeaking: false,
-        rtmpUrl: rtmp?.url,
+        rtmpUrl: rtmp.url,
       }
-    })
+    },
+    [
+      participantById,
+      sourceMediaById,
+      sessionSourceById,
+      rtmpSources,
+      effectiveHostPeerId,
+      pinnedIds,
+      connectionState,
+    ],
+  )
+
+  const allTileSources = useMemo<StudioTileSource[]>(() => {
+    const orderedVisible = orderedSourceIds
+      .map((sourceId, slotIndex) => buildTile(sourceId, slotIndex, false))
+      .filter((tile): tile is StudioTileSource => tile != null)
 
     const hiddenTiles: StudioTileSource[] = hiddenSourceIds
       .filter((sourceId) => !orderedSourceIds.includes(sourceId))
-      .map((sourceId) => {
-        const participant = participantById.get(sourceId)
-        if (participant) {
-          return {
-            sourceId,
-            kind: 'participant' as const,
-            displayName: participant.displayName,
-            slotIndex: -1,
-            isHost: sourceId === effectiveHostPeerId,
-            isHidden: true,
-            isPinned: pinnedIds.has(sourceId),
-            isSpeaking: false,
-            isLocal: participant.isLocal,
-            audioEnabled: participant.audioEnabled,
-            videoEnabled: participant.videoEnabled,
-            connectionStatus: participant.isLocal
-              ? (connectionState as StudioTileSource['connectionStatus'])
-              : 'connected',
-            videoTrack: participant.videoTrack,
-            audioTrack: participant.audioTrack,
-          }
-        }
-
-        const rtmp = rtmpSources.find((source) => source.source_id === sourceId)
-        return {
-          sourceId,
-          kind: 'rtmp' as const,
-          displayName: rtmp?.display_name || sourceId,
-          slotIndex: -1,
-          isHost: false,
-          isHidden: true,
-          isPinned: pinnedIds.has(sourceId),
-          isSpeaking: false,
-          rtmpUrl: rtmp?.url,
-        }
-      })
+      .map((sourceId) => buildTile(sourceId, -1, true))
+      .filter((tile): tile is StudioTileSource => tile != null)
 
     return [...orderedVisible, ...hiddenTiles]
-  }, [
-    orderedSourceIds,
-    participantById,
-    rtmpSources,
-    effectiveHostPeerId,
-    pinnedIds,
-    connectionState,
-    hiddenSourceIds,
-  ])
+  }, [orderedSourceIds, hiddenSourceIds, buildTile])
 
   const visibleTileSources = useMemo(
     () => allTileSources.filter((source) => !source.isHidden),
@@ -242,8 +291,12 @@ export function useTileOrderStore({
           const updated = await updateScene(sessionId, activeSceneId, {
             sources: { assignments },
           })
-          onSceneSourcesUpdated?.(updated.sources.assignments ?? assignments)
-          void persistSceneSources(sessionId, activeSceneId, updated.sources.assignments ?? assignments)
+          onSceneSourcesUpdated?.(updated.sources)
+          void persistSceneSources(
+            sessionId,
+            activeSceneId,
+            updated.sources.assignments ?? assignments,
+          )
         } else {
           const session = await updateSessionTileConfig(sessionId, {
             tile_order_config: { assignments },
