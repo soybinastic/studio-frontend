@@ -29,7 +29,7 @@ interface UseTileOrderStoreOptions {
   sceneSourcesConfig: SceneSourcesConfig | undefined
   /** Session registry Sources (camera / screen / prerecorded / …). */
   sessionSources?: Source[]
-  onSceneSourcesUpdated?: (assignments: Record<string, string>) => void
+  onSceneSourcesUpdated?: (sources: SceneSourcesConfig) => void
 }
 
 export function useTileOrderStore({
@@ -160,8 +160,8 @@ export function useTileOrderStore({
         attachedSessionSourceIds.has(source.id)
       ) {
         if (source.type === 'camera' && !isCameraSourceAvailable(source)) continue
-        // Screen without a live track stays out of preview until shared again.
-        if (source.type === 'screen' && !sourceMediaById.get(source.id)?.videoTrack) continue
+        // Screen stays in layout while on-scene + visible even without a live track
+        // (Wave C idle placeholder). Hide uses attachedSessionSourceIds; detach removes it.
         ids.push(source.id)
       }
     }
@@ -230,6 +230,7 @@ export function useTileOrderStore({
           isSpeaking: false,
           isLocal: media?.isLocal,
           videoEnabled: Boolean(media?.videoTrack),
+          audioEnabled: Boolean(media?.audioTrack),
           videoTrack: media?.videoTrack,
           audioTrack: media?.audioTrack,
         }
@@ -290,8 +291,12 @@ export function useTileOrderStore({
           const updated = await updateScene(sessionId, activeSceneId, {
             sources: { assignments },
           })
-          onSceneSourcesUpdated?.(updated.sources.assignments ?? assignments)
-          void persistSceneSources(sessionId, activeSceneId, updated.sources.assignments ?? assignments)
+          onSceneSourcesUpdated?.(updated.sources)
+          void persistSceneSources(
+            sessionId,
+            activeSceneId,
+            updated.sources.assignments ?? assignments,
+          )
         } else {
           const session = await updateSessionTileConfig(sessionId, {
             tile_order_config: { assignments },

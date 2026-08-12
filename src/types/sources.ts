@@ -24,7 +24,8 @@ export interface CameraSourceSettings {
 
 export interface ScreenSourceSettings {
   peerId?: string
-  producerId?: string
+  producerId?: string | null
+  audioProducerId?: string | null
   withSystemAudio?: boolean
 }
 

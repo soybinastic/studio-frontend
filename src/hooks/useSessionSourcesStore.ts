@@ -137,6 +137,34 @@ export function useSessionSourcesStore({
   const update = useCallback(
     async (sourceId: string, body: UpdateSourceRequest) => {
       if (!isHost || !sessionId) return null
+      // Optimistic local patch so OS/browser stop flips Stop→Start immediately.
+      if (body.settings !== undefined || body.state !== undefined) {
+        setSources((prev) =>
+          prev.map((row) => {
+            if (row.id !== sourceId) return row
+            const nextSettings =
+              body.settings !== undefined
+                ? (() => {
+                    const merged = {
+                      ...(row.settings as Record<string, unknown>),
+                      ...(body.settings as Record<string, unknown>),
+                    }
+                    for (const [key, value] of Object.entries(
+                      body.settings as Record<string, unknown>,
+                    )) {
+                      if (value === null) delete merged[key]
+                    }
+                    return merged as Source['settings']
+                  })()
+                : row.settings
+            return {
+              ...row,
+              ...(body.state !== undefined ? { state: body.state } : {}),
+              settings: nextSettings,
+            }
+          }),
+        )
+      }
       setIsMutating(true)
       try {
         const source = await updateSource(sessionId, sourceId, body)
@@ -144,12 +172,13 @@ export function useSessionSourcesStore({
         return source
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : 'Failed to update source')
+        void loadSources()
         return null
       } finally {
         setIsMutating(false)
       }
     },
-    [isHost, sessionId],
+    [isHost, sessionId, loadSources],
   )
 
   /** Lightweight PATCH for volume/mute — does not toggle list-wide isMutating. */

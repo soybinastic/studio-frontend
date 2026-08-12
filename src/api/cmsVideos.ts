@@ -27,11 +27,46 @@ export interface CmsVideo {
   duration: string | null
 }
 
+/** Normalized list envelope (CMS CustomPagination → DRF-like fields). */
 export interface CmsVideoListResult {
   count: number
   next: string | null
   previous: string | null
+  page: number
+  pageSize: number
   results: CmsVideo[]
+}
+
+/** Raw CMS CustomPagination + optional DRF-style fields. */
+interface CmsPaginatedVideoResponse {
+  count?: number
+  total?: number
+  next?: string | null
+  previous?: string | null
+  page?: number
+  page_size?: number
+  links?: {
+    next?: string | null
+    previous?: string | null
+  }
+  results?: CmsVideo[]
+}
+
+function normalizeCmsVideoList(
+  raw: CmsPaginatedVideoResponse,
+  fallbackPage: number,
+  fallbackPageSize: number,
+): CmsVideoListResult {
+  const results = Array.isArray(raw.results) ? raw.results : []
+  const count = Number(raw.total ?? raw.count ?? results.length) || 0
+  return {
+    count,
+    next: raw.links?.next ?? raw.next ?? null,
+    previous: raw.links?.previous ?? raw.previous ?? null,
+    page: Number(raw.page ?? fallbackPage) || fallbackPage,
+    pageSize: Number(raw.page_size ?? fallbackPageSize) || fallbackPageSize,
+    results,
+  }
 }
 
 export async function listCmsVideos(params?: {
@@ -65,5 +100,6 @@ export async function listCmsVideos(params?: {
     throw new ApiError(response.status, await parseCmsError(response))
   }
 
-  return response.json() as Promise<CmsVideoListResult>
+  const raw = (await response.json()) as CmsPaginatedVideoResponse
+  return normalizeCmsVideoList(raw, page, pageSize)
 }

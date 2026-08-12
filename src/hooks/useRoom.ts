@@ -22,6 +22,7 @@ export function useRoom({
 }: UseRoomOptions) {
   const clientRef = useRef<RoomClient | null>(null)
   const connectionStateRef = useRef<ConnectionState>('idle')
+  const sourceStoppedListenerRef = useRef<((sourceId: string) => void) | null>(null)
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle')
   const [participants, setParticipants] = useState<ParticipantMedia[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -68,10 +69,13 @@ export function useRoom({
   }, [])
 
   const produceScreenShare = useCallback(
-    async (sourceId: string): Promise<{ producerId: string }> => {
+    async (
+      sourceId: string,
+      options?: { withSystemAudio?: boolean },
+    ): Promise<{ producerId: string; audioProducerId?: string }> => {
       const client = clientRef.current
       if (!client) throw new Error('Room not connected')
-      return client.produceScreenShare(sourceId)
+      return client.produceScreenShare(sourceId, options)
     },
     [],
   )
@@ -79,6 +83,13 @@ export function useRoom({
   const stopScreenShare = useCallback(async (sourceId: string): Promise<void> => {
     await clientRef.current?.stopScreenShare(sourceId)
   }, [])
+
+  const setSourceStoppedListener = useCallback(
+    (listener: ((sourceId: string) => void) | null) => {
+      sourceStoppedListenerRef.current = listener
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!enabled || !roomId || !peerId || !displayName || !mediasoupWsUrl) {
@@ -92,6 +103,9 @@ export function useRoom({
       displayName,
       mediasoupWsUrl,
       autoPublish,
+      onSourceStopped: (sourceId) => {
+        sourceStoppedListenerRef.current?.(sourceId)
+      },
       onStateChange: (state) => {
         if (!cancelled) {
           connectionStateRef.current = state
@@ -152,6 +166,7 @@ export function useRoom({
     stopCameraSource,
     produceScreenShare,
     stopScreenShare,
+    setSourceStoppedListener,
     leave,
   }
 }

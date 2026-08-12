@@ -202,6 +202,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     stopCameraSource,
     produceScreenShare,
     stopScreenShare,
+    setSourceStoppedListener,
     leave,
   } = useRoom({
     roomId: context.roomId,
@@ -278,6 +279,29 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
   const sceneRefreshRef = useRef(sceneStore.refresh)
   sceneRefreshRef.current = sceneStore.refresh
 
+  // Browser "Stop sharing" / track ended → clear screen source producer ids.
+  const sessionSourcesStoreRef = useRef(sessionSourcesStore)
+  sessionSourcesStoreRef.current = sessionSourcesStore
+  useEffect(() => {
+    if (!context.isHost) {
+      setSourceStoppedListener(null)
+      return
+    }
+    setSourceStoppedListener((sourceId) => {
+      const store = sessionSourcesStoreRef.current
+      const source = store.sourceById.get(sourceId)
+      if (!source || source.type !== 'screen') return
+      const settings = {
+        ...(source.settings as Record<string, unknown>),
+        // null clears keys on the compositor PATCH (merge treats null as delete).
+        producerId: null,
+        audioProducerId: null,
+      }
+      void store.update(sourceId, { settings, state: 'STOPPED' })
+    })
+    return () => setSourceStoppedListener(null)
+  }, [context.isHost, setSourceStoppedListener])
+
   const sourcesRestoredRef = useRef(false)
 
   useEffect(() => {
@@ -338,7 +362,7 @@ export function StudioLayout({ context, sessionId }: StudioLayoutProps) {
     activeSceneId: sceneStore.activeSceneId,
     sceneSourcesConfig: activeSceneSources,
     sessionSources: sources,
-    onSceneSourcesUpdated: sceneStore.patchActiveSceneSources,
+    onSceneSourcesUpdated: sceneStore.patchActiveSceneSourcesConfig,
   })
 
   const previewParticipants = useMemo(
